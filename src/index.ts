@@ -1,0 +1,13 @@
+// @tanqory/theme-kit — public API. Themes import only from here.
+export { defineSection } from './defineSection'
+export { defineTheme, defineSettings, type ThemeConfig, type SettingsSchema } from './config'
+export { ThemeProvider, useSettings, useT } from './theme-context'
+export { mount, type MountOptions } from './mount'
+export { SectionTree } from './SectionTree'
+export { Editor } from './editor'
+export { registerSections, getSection, allSections } from './registry'
+export { DataProvider, useData, createMockData, formatMoney } from './data'
+export { jsxToJSON } from './jsx-to-json'
+export { tag, type Tag } from './composition'
+export type { Money, Product, Collection, DataApi } from './data'
+export type { SectionDef, SectionProps, ContentNode, PageDoc, AttrSpec } from './types'

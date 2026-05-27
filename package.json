@@ -1,0 +1,34 @@
+{
+  "name": "@tanqory/theme-kit",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Framework for Tanqory React themes — block registry, JSON-tree renderer, data layer, mount(). Themes depend on this and only author blocks/ + pages/.",
+  "files": ["dist"],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./ssg": {
+      "types": "./dist/types/ssg.d.ts",
+      "default": "./dist/ssg.js"
+    }
+  },
+  "scripts": {
+    "build": "vite build && tsc -p tsconfig.json --emitDeclarationOnly --declaration --outDir dist/types",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "peerDependencies": {
+    "react": "^18 || ^19",
+    "react-dom": "^18 || ^19"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}
