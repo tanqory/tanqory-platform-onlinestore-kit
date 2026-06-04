@@ -89,6 +89,13 @@ export interface LiveDataOptions {
   storeId: string
   /** Publishable storefront token — passed as `x-publishable-key`. */
   token?: string
+  /**
+   * ISO 3166 alpha-2 (e.g. "TH", "SG", "US"). When set, the backend resolves
+   * the matching Market for this country, applies its currency + exchange
+   * rate, and returns Money fields in that currency. Falls back to store
+   * base currency if no Market matches the country.
+   */
+  country?: string
   /** Optional fetch override (testing / SSR). */
   fetcher?: typeof fetch
   /** Tune how much to load at boot. */
@@ -214,6 +221,10 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
     headers: {
       'content-type': 'application/json',
       ...(opts.token ? { 'x-publishable-key': opts.token } : {}),
+      // X-Tanqory-Country triggers backend Market resolution; if the store
+      // has an active Market with this country, Money.currencyCode + amount
+      // come back already-converted in the target currency.
+      ...(opts.country ? { 'x-tanqory-country': opts.country.toUpperCase() } : {}),
     },
     body: JSON.stringify({
       query: COLLECTIONS_QUERY,
