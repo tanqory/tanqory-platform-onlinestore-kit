@@ -97,11 +97,20 @@ export interface LiveDataOptions {
     collectionLimit?: number
     /** Max products to inline under each collection (default 24). */
     productLimitPerCollection?: number
+    /** Max products to fetch at the top level (default 24) — these power the
+     *  synthesized `featured` / `all` virtual collections when the store has
+     *  no real collections yet. */
+    topProductLimit?: number
   }
 }
 
+// Bootstrap fetches BOTH collections AND a flat product list. The flat list
+// powers a synthesized "featured" virtual collection when the store has live
+// products but the merchant hasn't built a real collection yet — without it,
+// a brand-new merchant's first Active product would never appear on the
+// storefront (collections-only bootstrap = empty homepage).
 const COLLECTIONS_QUERY = /* GraphQL */ `
-  query NovaBootstrap($first: Int!, $productFirst: Int!) {
+  query NovaBootstrap($first: Int!, $productFirst: Int!, $productsTop: Int!) {
     collections(first: $first) {
       edges {
         node {
@@ -120,6 +129,17 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
               }
             }
           }
+        }
+      }
+    }
+    products(first: $productsTop) {
+      edges {
+        node {
+          id
+          handle
+          title
+          featuredImage { url altText }
+          priceRange { minVariantPrice { amount currencyCode } }
         }
       }
     }
@@ -144,6 +164,7 @@ interface GqlCollectionNode {
 }
 interface BootstrapData {
   collections: { edges: Array<{ node: GqlCollectionNode }> }
+  products: { edges: Array<{ node: GqlProductNode }> }
 }
 
 function normalizeImage(img: GqlImg): { url: string; altText?: string } | null {
@@ -179,8 +200,14 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
   }
   const endpoint = opts.endpoint.replace(/\/$/, '')
   const url = `${endpoint}/api/v1/stores/${encodeURIComponent(opts.storeId)}/graphql`
-  const collectionLimit = opts.prefetch?.collectionLimit ?? 20
-  const productLimitPerCollection = opts.prefetch?.productLimitPerCollection ?? 24
+  // Defaults stay under store-api's GraphQL cost budget (1000). Cost formula
+  // for the bootstrap query: 3*N + 4*N*M + 4*T  (N = collectionLimit,
+  // M = productLimitPerCollection, T = topProductLimit). 10 + 10 + 24 = 526
+  // — plenty of headroom for a homepage prefetch. Bump in opts.prefetch only
+  // if you're sure the store's cost-budget limit is higher than 1000.
+  const collectionLimit = opts.prefetch?.collectionLimit ?? 10
+  const productLimitPerCollection = opts.prefetch?.productLimitPerCollection ?? 10
+  const topProductLimit = opts.prefetch?.topProductLimit ?? 24
 
   const res = await f(url, {
     method: 'POST',
@@ -190,7 +217,11 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
     },
     body: JSON.stringify({
       query: COLLECTIONS_QUERY,
-      variables: { first: collectionLimit, productFirst: productLimitPerCollection },
+      variables: {
+        first: collectionLimit,
+        productFirst: productLimitPerCollection,
+        productsTop: topProductLimit,
+      },
     }),
   })
   if (!res.ok) {
@@ -205,8 +236,36 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
   const collections: Collection[] = (json.data?.collections.edges ?? []).map((e) =>
     normalizeCollection(e.node),
   )
+  const topProducts: Product[] = (json.data?.products.edges ?? []).map((e) =>
+    normalizeProduct(e.node),
+  )
+
+  // Themes commonly reference `featured` / `frontpage` / `all` as their homepage
+  // collection. Synthesize one when the merchant hasn't created a real
+  // collection yet but DOES have Active products — otherwise their first
+  // product would never appear on the storefront. Also ensure `allProducts`
+  // is wired even when no products exist outside of collections.
+  if (topProducts.length > 0 && !collections.some((c) => c.handle === 'featured')) {
+    collections.unshift({
+      handle: 'featured',
+      title: 'Featured',
+      image: topProducts[0].featuredImage ?? null,
+      products: topProducts.slice(0, productLimitPerCollection),
+    })
+  }
+  // Mirror as `all` too — many themes (incl. our nova templates) reference it.
+  if (topProducts.length > 0 && !collections.some((c) => c.handle === 'all')) {
+    collections.push({
+      handle: 'all',
+      title: 'All products',
+      image: topProducts[0].featuredImage ?? null,
+      products: topProducts,
+    })
+  }
 
   // Reuse the createMockData factory — same cache shape, same DataApi.
+  // It also indexes products by handle so productByHandle() works even for
+  // products fetched only via the top-level products() query.
   return createMockData(collections)
 }
 
