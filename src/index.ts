@@ -7,7 +7,13 @@ export { SectionTree } from './SectionTree'
 export { Editor } from './editor'
 export { registerSections, getSection, allSections } from './registry'
 export { DataProvider, useData, createMockData, createLiveData, formatMoney } from './data'
-export type { LiveDataOptions } from './data'
+export type {
+  LiveDataOptions,
+  Localization,
+  LocalizedCountry,
+  LocalizedMarket,
+  LocalizedCurrency,
+} from './data'
 export { jsxToJSON } from './jsx-to-json'
 export { tag, type Tag } from './composition'
 export type { Money, Product, Collection, DataApi } from './data'

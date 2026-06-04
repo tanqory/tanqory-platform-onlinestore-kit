@@ -29,6 +29,33 @@ export interface DataApi {
    * (ported from the canonical examples/react theme in PR #2).
    */
   productByHandle: (handle: string) => Product | null
+  /** Localization snapshot — what markets/countries the store has live.
+   *  null = mock data; the country switcher should hide itself. */
+  localization: Localization | null
+}
+
+/** Country/market shape mirrored from storefront GraphQL `Localization`. */
+export interface LocalizedCurrency {
+  isoCode: string
+  name?: string
+  symbol?: string
+}
+export interface LocalizedMarket {
+  id: string
+  handle: string
+  name: string
+}
+export interface LocalizedCountry {
+  isoCode: string
+  name: string
+  currency: LocalizedCurrency
+  market: LocalizedMarket | null
+}
+export interface Localization {
+  /** Currently-active country (resolved from the request's X-Tanqory-Country). */
+  country: LocalizedCountry
+  /** Every country the store has an active Market for — what the picker shows. */
+  availableCountries: LocalizedCountry[]
 }
 
 const DataContext = createContext<DataApi | null>(null)
@@ -59,6 +86,7 @@ export function createMockData(collections: Collection[]): DataApi {
     collectionByHandle: (handle) => collections.find((c) => c.handle === handle) ?? null,
     allCollections: () => collections,
     productByHandle: (handle) => productsByHandle.get(handle) ?? null,
+    localization: null,
   }
 }
 
@@ -150,6 +178,20 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
         }
       }
     }
+    localization {
+      country {
+        isoCode
+        name
+        currency { isoCode name symbol }
+        market { id handle name }
+      }
+      availableCountries {
+        isoCode
+        name
+        currency { isoCode name symbol }
+        market { id handle name }
+      }
+    }
   }
 `
 
@@ -172,6 +214,10 @@ interface GqlCollectionNode {
 interface BootstrapData {
   collections: { edges: Array<{ node: GqlCollectionNode }> }
   products: { edges: Array<{ node: GqlProductNode }> }
+  localization: {
+    country: LocalizedCountry
+    availableCountries: LocalizedCountry[]
+  }
 }
 
 function normalizeImage(img: GqlImg): { url: string; altText?: string } | null {
@@ -277,7 +323,19 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
   // Reuse the createMockData factory — same cache shape, same DataApi.
   // It also indexes products by handle so productByHandle() works even for
   // products fetched only via the top-level products() query.
-  return createMockData(collections)
+  const data = createMockData(collections)
+  const loc = json.data?.localization
+  if (loc) {
+    // Only expose the localization payload when the store actually has Markets
+    // (availableCountries non-empty). With zero markets, leave `null` so the
+    // theme's country picker hides itself instead of showing a hardcoded list
+    // that doesn't match what the merchant has configured.
+    data.localization =
+      loc.availableCountries.length > 0
+        ? { country: loc.country, availableCountries: loc.availableCountries }
+        : null
+  }
+  return data
 }
 
 export function formatMoney(money: Money): string {
