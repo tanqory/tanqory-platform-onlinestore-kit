@@ -80,6 +80,26 @@ export function PreviewBridge({
           productCount: c.products.length,
         }))
         send({ type: 'tanqory-collections', requestId: e.data.requestId ?? null, collections })
+      } else if (e.data.type === 'tanqory-request-products') {
+        // Same idea as collections — flatten every product across collections,
+        // dedupe by handle (first occurrence wins, matching SectionTree's
+        // canonical-handle rule), and hand the editor enough metadata to
+        // render a search/filter picker without a second round-trip.
+        const seen = new Set<string>()
+        const products: Array<{ handle: string; title: string; price: string; image: string | null }> = []
+        for (const c of data.allCollections()) {
+          for (const p of c.products) {
+            if (seen.has(p.handle)) continue
+            seen.add(p.handle)
+            products.push({
+              handle: p.handle,
+              title: p.title,
+              price: p.price?.amount ?? '',
+              image: p.featuredImage?.url ?? null,
+            })
+          }
+        }
+        send({ type: 'tanqory-products', requestId: e.data.requestId ?? null, products })
       }
     }
     window.addEventListener('message', onMsg)
