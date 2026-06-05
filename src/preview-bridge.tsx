@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, type FC, type ReactNode } from 'react'
 import { SectionTree } from './SectionTree'
+import { useData } from './data'
 import type { ContentNode } from './types'
 
 /**
@@ -30,6 +31,7 @@ export function PreviewBridge({
 }): JSX.Element {
   const [tree, setTree] = useState<ContentNode[]>(pages[initialPage] ?? [])
   const [selected, setSelected] = useState<number[] | null>(null)
+  const data = useData()
   const send = (msg: object) => window.parent?.postMessage(msg, '*')
 
   // Keep the latest tree in a ref so the message handler can return it on
@@ -68,6 +70,16 @@ export function PreviewBridge({
       } else if (e.data.type === 'tanqory-preview-select') {
         const id = e.data.sectionId as string
         setTree((t) => { const i = t.findIndex((n) => n.id === id); setSelected(i >= 0 ? [i] : null); return t })
+      } else if (e.data.type === 'tanqory-request-collections') {
+        // Editor needs to populate a `type: 'collection'` picker — reply with
+        // every collection the bootstrap query loaded so the merchant sees
+        // their actual storefront catalogue, not a typed-in handle.
+        const collections = data.allCollections().map((c) => ({
+          handle: c.handle,
+          title: c.title,
+          productCount: c.products.length,
+        }))
+        send({ type: 'tanqory-collections', requestId: e.data.requestId ?? null, collections })
       }
     }
     window.addEventListener('message', onMsg)
