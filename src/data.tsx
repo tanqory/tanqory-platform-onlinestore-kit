@@ -17,6 +17,16 @@ export interface Collection {
   image?: { url?: string; altText?: string } | null
   products: Product[]
 }
+export interface Page {
+  handle: string
+  title: string
+  /** HTML body — rendered via dangerouslySetInnerHTML by the PageBody section. */
+  body: string
+  bodySummary?: string
+  author?: string | null
+  publishedAt?: string
+  updatedAt?: string
+}
 
 /** The data interface every block consumes. Themes provide an implementation. */
 export interface DataApi {
@@ -29,6 +39,15 @@ export interface DataApi {
    * (ported from the canonical examples/react theme in PR #2).
    */
   productByHandle: (handle: string) => Product | null
+  /**
+   * Look up a Page by handle (the storefront's `/pages/<handle>` content).
+   * Returns null if the handle wasn't prefetched at boot or the merchant
+   * hasn't published a page with that handle. Live data prefetches only the
+   * page matching the current URL, so other handles return null even when
+   * they exist in the backend — themes should only call this for the page
+   * the user is on.
+   */
+  pageByHandle: (handle: string) => Page | null
   /** Localization snapshot — what markets/countries the store has live.
    *  null = mock data; the country switcher should hide itself. */
   localization: Localization | null
@@ -86,6 +105,7 @@ export function createMockData(collections: Collection[]): DataApi {
     collectionByHandle: (handle) => collections.find((c) => c.handle === handle) ?? null,
     allCollections: () => collections,
     productByHandle: (handle) => productsByHandle.get(handle) ?? null,
+    pageByHandle: () => null,
     localization: null,
   }
 }
@@ -126,6 +146,13 @@ export interface LiveDataOptions {
   country?: string
   /** Optional fetch override (testing / SSR). */
   fetcher?: typeof fetch
+  /**
+   * Page handle (from `/pages/<handle>`) to fetch alongside the homepage
+   * bootstrap. The theme entry resolves the current URL once at boot and
+   * passes the matching handle here so the PageBody section can read
+   * `dataApi.pageByHandle(handle)` synchronously during hydration.
+   */
+  pageHandle?: string
   /** Tune how much to load at boot. */
   prefetch?: {
     /** Max collections to fetch (default 20). */
@@ -145,7 +172,16 @@ export interface LiveDataOptions {
 // a brand-new merchant's first Active product would never appear on the
 // storefront (collections-only bootstrap = empty homepage).
 const COLLECTIONS_QUERY = /* GraphQL */ `
-  query NovaBootstrap($first: Int!, $productFirst: Int!, $productsTop: Int!) {
+  query NovaBootstrap($first: Int!, $productFirst: Int!, $productsTop: Int!, $pageHandle: String) {
+    page(handle: $pageHandle) {
+      handle
+      title
+      body
+      bodySummary
+      author
+      publishedAt
+      updatedAt
+    }
     collections(first: $first) {
       edges {
         node {
@@ -211,9 +247,19 @@ interface GqlCollectionNode {
   image?: GqlImg
   products: { edges: Array<{ node: GqlProductNode }> }
 }
+interface GqlPageNode {
+  handle: string
+  title: string
+  body: string
+  bodySummary?: string | null
+  author?: string | null
+  publishedAt?: string | null
+  updatedAt?: string | null
+}
 interface BootstrapData {
   collections: { edges: Array<{ node: GqlCollectionNode }> }
   products: { edges: Array<{ node: GqlProductNode }> }
+  page: GqlPageNode | null
   localization: {
     country: LocalizedCountry
     availableCountries: LocalizedCountry[]
@@ -278,6 +324,7 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
         first: collectionLimit,
         productFirst: productLimitPerCollection,
         productsTop: topProductLimit,
+        pageHandle: opts.pageHandle ?? null,
       },
     }),
   })
@@ -324,6 +371,21 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
   // It also indexes products by handle so productByHandle() works even for
   // products fetched only via the top-level products() query.
   const data = createMockData(collections)
+  const pageNode = json.data?.page
+  if (pageNode) {
+    // Cache only the page that matched the URL. pageByHandle returns null
+    // for everything else — themes should only call it for the current page.
+    const page: Page = {
+      handle: pageNode.handle,
+      title: pageNode.title,
+      body: pageNode.body,
+      ...(pageNode.bodySummary ? { bodySummary: pageNode.bodySummary } : {}),
+      ...(pageNode.author ? { author: pageNode.author } : {}),
+      ...(pageNode.publishedAt ? { publishedAt: pageNode.publishedAt } : {}),
+      ...(pageNode.updatedAt ? { updatedAt: pageNode.updatedAt } : {}),
+    }
+    data.pageByHandle = (handle) => (handle === page.handle ? page : null)
+  }
   const loc = json.data?.localization
   if (loc) {
     // Only expose the localization payload when the store actually has Markets
