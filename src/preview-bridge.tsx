@@ -76,13 +76,32 @@ export function PreviewBridge({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Click a top-level section → report its path so the editor can select it.
+  // Click any element inside a rendered section → report its identity so the
+  // editor can highlight the matching row in the tree and surface its
+  // settings panel. We send BOTH the legacy `tq:select` (with path) and the
+  // editor's `tanqory-section-selected` (with sectionId) — the editor side
+  // only listens to the latter, but external tooling may still be on tq:.
+  //
+  // Preview-mode click handling also short-circuits internal navigation:
+  // anchors inside a section would otherwise pull the iframe off the page
+  // the editor is editing. Section CTAs become "select this" while the
+  // editor is open.
   const onClickCapture = (e: React.MouseEvent) => {
-    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-tq-path]')
-    if (el?.dataset.tqPath) {
-      const path = el.dataset.tqPath.split('.').map(Number)
+    const target = e.target as HTMLElement
+    const sectionEl = target.closest<HTMLElement>('[data-tq-section-id]')
+    if (!sectionEl) return
+    const sectionId = sectionEl.dataset.tqSectionId
+    const pathAttr = sectionEl.dataset.tqPath
+    if (target.closest('a, button[type="submit"]')) {
+      e.preventDefault()
+    }
+    if (pathAttr) {
+      const path = pathAttr.split('.').map(Number)
       setSelected(path)
       send({ type: 'tq:select', path })
+    }
+    if (sectionId) {
+      send({ type: 'tanqory-section-selected', sectionId })
     }
   }
 
