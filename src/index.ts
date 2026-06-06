@@ -7,12 +7,16 @@ export { SectionTree } from './SectionTree'
 export { Editor } from './editor'
 export { registerSections, getSection, allSections } from './registry'
 export { DataProvider, useData, createMockData, createLiveData, formatMoney } from './data'
+export { CartProvider, useCart } from './cart'
+export type { CartApi, CartLine, CartState, AddToCartInput } from './cart'
 export type {
   LiveDataOptions,
   Localization,
   LocalizedCountry,
   LocalizedMarket,
   LocalizedCurrency,
+  ProductOption,
+  ProductVariant,
 } from './data'
 export { jsxToJSON } from './jsx-to-json'
 export { tag, type Tag } from './composition'

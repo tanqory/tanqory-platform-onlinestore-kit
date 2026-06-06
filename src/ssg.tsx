@@ -4,6 +4,7 @@ import { renderToString } from 'react-dom/server'
 import { registerSections } from './registry'
 import { SectionTree } from './SectionTree'
 import { DataProvider } from './data'
+import { CartProvider } from './cart'
 import { ThemeProvider } from './theme-context'
 import type { SectionDef, PageDoc } from './types'
 import type { MountOptions } from './mount'
@@ -36,9 +37,11 @@ export function renderStorefrontHTML(opts: MountOptions): string {
   return renderToString(
     <DataProvider value={opts.data}>
       <ThemeProvider settings={opts.settings} locale={opts.locale}>
-        <Shell>
-          <SectionTree tree={pageDoc.sections} />
-        </Shell>
+        <CartProvider>
+          <Shell>
+            <SectionTree tree={pageDoc.sections} />
+          </Shell>
+        </CartProvider>
       </ThemeProvider>
     </DataProvider>,
   )

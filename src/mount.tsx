@@ -4,6 +4,7 @@ import { createRoot, hydrateRoot } from 'react-dom/client'
 import { registerSections } from './registry'
 import { SectionTree } from './SectionTree'
 import { DataProvider, type DataApi } from './data'
+import { CartProvider } from './cart'
 import { ThemeProvider } from './theme-context'
 import { Editor } from './editor'
 import { PreviewBridge } from './preview-bridge'
@@ -83,15 +84,17 @@ export function mount(opts: MountOptions): void {
     <React.StrictMode>
       <DataProvider value={opts.data}>
         <ThemeProvider settings={opts.settings} locale={opts.locale}>
-          {previewMode ? (
-            <PreviewBridge pages={pagesByName} initialPage={opts.page ?? 'index'} Shell={Shell} />
-          ) : editMode ? (
-            <Editor pages={pagesByName} initialPage={opts.page ?? 'index'} />
-          ) : (
-            <Shell>
-              <SectionTree tree={pageDoc.sections} />
-            </Shell>
-          )}
+          <CartProvider>
+            {previewMode ? (
+              <PreviewBridge pages={pagesByName} initialPage={opts.page ?? 'index'} Shell={Shell} />
+            ) : editMode ? (
+              <Editor pages={pagesByName} initialPage={opts.page ?? 'index'} />
+            ) : (
+              <Shell>
+                <SectionTree tree={pageDoc.sections} />
+              </Shell>
+            )}
+          </CartProvider>
         </ThemeProvider>
       </DataProvider>
     </React.StrictMode>

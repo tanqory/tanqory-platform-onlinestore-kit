@@ -4,11 +4,35 @@ export interface Money {
   amount: string
   currencyCode: string
 }
+export interface ProductOption {
+  name: string
+  values: string[]
+}
+export interface ProductVariant {
+  id: string
+  title: string
+  price: Money
+  availableForSale: boolean
+  selectedOptions?: { name: string; value: string }[]
+  image?: { url: string; altText?: string } | null
+}
 export interface Product {
+  /** Storefront GraphQL node id (present for live data). */
+  id?: string
   handle: string
   title: string
   price: Money
   featuredImage?: { url: string; altText?: string } | null
+  /** Default purchasable variant id (`firstAvailableVariant`) — enough to add
+   *  to cart from a grid/card without loading the full variant list. */
+  variantId?: string
+  availableForSale?: boolean
+  /** Long description — only populated by `fetchProduct()` (PDP). */
+  description?: string
+  /** Option definitions (Size, Color…) — only after `fetchProduct()`. */
+  options?: ProductOption[]
+  /** Full variant list — only after `fetchProduct()` (PDP). */
+  variants?: ProductVariant[]
 }
 export interface Collection {
   handle: string
@@ -51,6 +75,18 @@ export interface DataApi {
   /** Localization snapshot — what markets/countries the store has live.
    *  null = mock data; the country switcher should hide itself. */
   localization: Localization | null
+  /**
+   * Raw GraphQL escape hatch against the same storefront endpoint the live
+   * data source was booted with. Present ONLY for live data — undefined for
+   * mock data. Powers post-boot interactions (the cart's mutations live here).
+   */
+  graphql?: <T = unknown>(query: string, variables?: Record<string, unknown>) => Promise<T>
+  /**
+   * Fetch a single product WITH its full options + variants on demand (for the
+   * product page's variant picker). Live data hits the backend; mock data
+   * resolves synchronously from the prefetched cache. Returns null if missing.
+   */
+  fetchProduct?: (handle: string) => Promise<Product | null>
 }
 
 /** Country/market shape mirrored from storefront GraphQL `Localization`. */
@@ -195,8 +231,10 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
                 id
                 handle
                 title
+                availableForSale
                 featuredImage { url altText }
                 priceRange { minVariantPrice { amount currencyCode } }
+                firstAvailableVariant { id }
               }
             }
           }
@@ -209,8 +247,10 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
           id
           handle
           title
+          availableForSale
           featuredImage { url altText }
           priceRange { minVariantPrice { amount currencyCode } }
+          firstAvailableVariant { id }
         }
       }
     }
@@ -237,8 +277,10 @@ interface GqlProductNode {
   id: string
   handle: string
   title: string
+  availableForSale?: boolean
   featuredImage?: GqlImg
   priceRange?: { minVariantPrice?: GqlMoney }
+  firstAvailableVariant?: { id: string } | null
 }
 interface GqlCollectionNode {
   id: string
@@ -276,10 +318,13 @@ function normalizeImage(img: GqlImg): { url: string; altText?: string } | null {
 
 function normalizeProduct(p: GqlProductNode): Product {
   return {
+    id: p.id,
     handle: p.handle,
     title: p.title,
     price: p.priceRange?.minVariantPrice ?? { amount: '0', currencyCode: 'USD' },
     featuredImage: normalizeImage(p.featuredImage),
+    ...(p.firstAvailableVariant?.id ? { variantId: p.firstAvailableVariant.id } : {}),
+    ...(typeof p.availableForSale === 'boolean' ? { availableForSale: p.availableForSale } : {}),
   }
 }
 
@@ -292,11 +337,75 @@ function normalizeCollection(c: GqlCollectionNode): Collection {
   }
 }
 
+// Single-product fetch (PDP) — full options + variants for the variant picker.
+// Kept out of the bootstrap (variants(first:100) @cost=100/product would blow
+// the cost budget) and fetched lazily only on the product page.
+const PRODUCT_QUERY = /* GraphQL */ `
+  query NovaProduct($handle: String!) {
+    product(handle: $handle) {
+      id
+      handle
+      title
+      description
+      availableForSale
+      featuredImage { url altText }
+      priceRange { minVariantPrice { amount currencyCode } }
+      options(first: 10) { name values }
+      variants(first: 100) {
+        nodes {
+          id
+          title
+          availableForSale
+          price { amount currencyCode }
+          image { url altText }
+          selectedOptions { name value }
+        }
+      }
+      firstAvailableVariant { id }
+    }
+  }
+`
+
+interface GqlVariantNode {
+  id: string
+  title: string
+  availableForSale: boolean
+  price?: GqlMoney
+  image?: GqlImg
+  selectedOptions?: Array<{ name: string; value: string }>
+}
+interface GqlProductDetailNode extends GqlProductNode {
+  description?: string | null
+  options?: Array<{ name: string; values: string[] }>
+  variants?: { nodes: GqlVariantNode[] }
+}
+
+function normalizeProductDetail(p: GqlProductDetailNode): Product {
+  const base = normalizeProduct(p)
+  const variants: ProductVariant[] = (p.variants?.nodes ?? []).map((v) => ({
+    id: v.id,
+    title: v.title,
+    price: v.price ?? base.price,
+    availableForSale: v.availableForSale,
+    ...(v.selectedOptions?.length ? { selectedOptions: v.selectedOptions } : {}),
+    image: normalizeImage(v.image),
+  }))
+  return {
+    ...base,
+    ...(p.description ? { description: p.description } : {}),
+    ...(p.options?.length ? { options: p.options } : {}),
+    ...(variants.length ? { variants } : {}),
+  }
+}
+
 export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
-  const f = opts.fetcher ?? (globalThis.fetch as typeof fetch | undefined)
-  if (!f) {
+  const maybeFetch = opts.fetcher ?? (globalThis.fetch as typeof fetch | undefined)
+  if (!maybeFetch) {
     throw new Error('[theme-kit] createLiveData: fetch is not available in this environment')
   }
+  // Capture into a definitely-defined const so the narrowing survives into the
+  // graphqlRequest closure below (TS drops `!undefined` narrowing across scopes).
+  const f: typeof fetch = maybeFetch
   const endpoint = opts.endpoint.replace(/\/$/, '')
   const url = `${endpoint}/api/v1/stores/${encodeURIComponent(opts.storeId)}/graphql`
   // Defaults stay under store-api's GraphQL cost budget (1000). Cost formula
@@ -308,39 +417,47 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
   const productLimitPerCollection = opts.prefetch?.productLimitPerCollection ?? 10
   const topProductLimit = opts.prefetch?.topProductLimit ?? 24
 
-  const res = await f(url, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...(opts.token ? { 'x-publishable-key': opts.token } : {}),
-      // X-Tanqory-Country triggers backend Market resolution; if the store
-      // has an active Market with this country, Money.currencyCode + amount
-      // come back already-converted in the target currency.
-      ...(opts.country ? { 'x-tanqory-country': opts.country.toUpperCase() } : {}),
-    },
-    body: JSON.stringify({
-      query: COLLECTIONS_QUERY,
-      variables: {
-        first: collectionLimit,
-        productFirst: productLimitPerCollection,
-        productsTop: topProductLimit,
-        pageHandle: opts.pageHandle ?? null,
+  // One request path for the bootstrap AND every post-boot interaction (the
+  // cart's mutations, the PDP's lazy product fetch) — same endpoint, same
+  // publishable-key + country headers, same error handling.
+  async function graphqlRequest<T = unknown>(
+    query: string,
+    variables?: Record<string, unknown>,
+  ): Promise<T> {
+    const res = await f(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(opts.token ? { 'x-publishable-key': opts.token } : {}),
+        // X-Tanqory-Country triggers backend Market resolution; if the store
+        // has an active Market with this country, Money.currencyCode + amount
+        // come back already-converted in the target currency.
+        ...(opts.country ? { 'x-tanqory-country': opts.country.toUpperCase() } : {}),
       },
-    }),
+      body: JSON.stringify({ query, variables }),
+    })
+    if (!res.ok) {
+      throw new Error(
+        `[theme-kit] GraphQL HTTP ${res.status} from ${url} — ${await res.text().catch(() => '')}`,
+      )
+    }
+    const json = (await res.json()) as { data?: T; errors?: Array<{ message: string }> }
+    if (json.errors?.length) {
+      throw new Error(`[theme-kit] GraphQL errors: ${json.errors.map((e) => e.message).join('; ')}`)
+    }
+    return json.data as T
+  }
+
+  const boot = await graphqlRequest<BootstrapData>(COLLECTIONS_QUERY, {
+    first: collectionLimit,
+    productFirst: productLimitPerCollection,
+    productsTop: topProductLimit,
+    pageHandle: opts.pageHandle ?? null,
   })
-  if (!res.ok) {
-    throw new Error(
-      `[theme-kit] createLiveData: HTTP ${res.status} from ${url} — ${await res.text().catch(() => '')}`,
-    )
-  }
-  const json = (await res.json()) as { data?: BootstrapData; errors?: Array<{ message: string }> }
-  if (json.errors?.length) {
-    throw new Error(`[theme-kit] GraphQL errors: ${json.errors.map((e) => e.message).join('; ')}`)
-  }
-  const collections: Collection[] = (json.data?.collections.edges ?? []).map((e) =>
+  const collections: Collection[] = (boot?.collections.edges ?? []).map((e) =>
     normalizeCollection(e.node),
   )
-  const topProducts: Product[] = (json.data?.products.edges ?? []).map((e) =>
+  const topProducts: Product[] = (boot?.products.edges ?? []).map((e) =>
     normalizeProduct(e.node),
   )
 
@@ -371,7 +488,7 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
   // It also indexes products by handle so productByHandle() works even for
   // products fetched only via the top-level products() query.
   const data = createMockData(collections)
-  const pageNode = json.data?.page
+  const pageNode = boot?.page
   if (pageNode) {
     // Cache only the page that matched the URL. pageByHandle returns null
     // for everything else — themes should only call it for the current page.
@@ -386,7 +503,7 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
     }
     data.pageByHandle = (handle) => (handle === page.handle ? page : null)
   }
-  const loc = json.data?.localization
+  const loc = boot?.localization
   if (loc) {
     // Only expose the localization payload when the store actually has Markets
     // (availableCountries non-empty). With zero markets, leave `null` so the
@@ -396,6 +513,16 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
       loc.availableCountries.length > 0
         ? { country: loc.country, availableCountries: loc.availableCountries }
         : null
+  }
+
+  // Post-boot capabilities: the raw GraphQL escape hatch (cart mutations live
+  // on top of this) and an on-demand single-product fetch (PDP variant picker).
+  data.graphql = graphqlRequest
+  data.fetchProduct = async (handle: string): Promise<Product | null> => {
+    const res = await graphqlRequest<{ product: GqlProductDetailNode | null }>(PRODUCT_QUERY, {
+      handle,
+    })
+    return res?.product ? normalizeProductDetail(res.product) : null
   }
   return data
 }
