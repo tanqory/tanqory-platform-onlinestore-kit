@@ -63,10 +63,30 @@ export function PreviewBridge({
       } else if (e.data.type === 'tq:select') {
         setSelected(Array.isArray(e.data.path) ? (e.data.path as number[]) : null)
       } else if (e.data.type === 'tanqory-preview-update-section') {
-        // studio-editor edited a section's settings → merge + re-render live
+        // studio-editor edited a section's settings (and possibly its child
+        // blocks) → merge + re-render live. The editor sends blocks in its
+        // OWN shape (object map keyed by id + order[]) — convert to
+        // theme-kit's array here so render code only ever sees arrays.
         const id = e.data.sectionId as string
         const s = (e.data.settings ?? {}) as Record<string, unknown>
-        setTree((t) => t.map((n) => (n.id === id ? { ...n, settings: { ...n.settings, ...s } } : n)))
+        const rawBlocks = e.data.blocks as Record<string, ContentNode> | ContentNode[] | null
+        const order = e.data.order as string[] | null
+        let blocks: ContentNode[] | undefined
+        if (Array.isArray(rawBlocks)) {
+          blocks = rawBlocks
+        } else if (rawBlocks && typeof rawBlocks === 'object') {
+          const ids = Array.isArray(order) && order.length ? order : Object.keys(rawBlocks)
+          blocks = ids
+            .filter((bid) => rawBlocks[bid])
+            .map((bid) => ({ ...rawBlocks[bid], id: rawBlocks[bid].id ?? bid }))
+        }
+        setTree((t) =>
+          t.map((n) =>
+            n.id === id
+              ? { ...n, settings: { ...n.settings, ...s }, ...(blocks ? { blocks } : {}) }
+              : n,
+          ),
+        )
       } else if (e.data.type === 'tanqory-preview-select') {
         const id = e.data.sectionId as string
         setTree((t) => { const i = t.findIndex((n) => n.id === id); setSelected(i >= 0 ? [i] : null); return t })

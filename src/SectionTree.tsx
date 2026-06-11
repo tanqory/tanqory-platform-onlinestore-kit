@@ -10,6 +10,22 @@ function resolveAttributes(def: SectionDef, settings?: Record<string, unknown>):
   return out
 }
 
+/** Tolerate both child-block shapes. Templates written by older editor
+ *  builds carry blocks as an OBJECT MAP keyed by id (the studio editor's
+ *  internal shape) instead of theme-kit's array — `blocks.map` on that
+ *  object crashed the ENTIRE storefront render ("o.map is not a function").
+ *  A malformed template must degrade to "blocks don't render", never to a
+ *  dead page. */
+function normalizeBlocks(blocks: ContentNode['blocks'] | Record<string, ContentNode>): ContentNode[] {
+  if (Array.isArray(blocks)) return blocks
+  if (blocks && typeof blocks === 'object') {
+    return Object.entries(blocks)
+      .filter(([, b]) => b && typeof b === 'object' && typeof (b as ContentNode).type === 'string')
+      .map(([id, b]) => ({ ...(b as ContentNode), id: (b as ContentNode).id ?? id }))
+  }
+  return []
+}
+
 function RenderNode({
   node,
   path,
@@ -38,7 +54,7 @@ function RenderNode({
       style={{ display: 'contents' }}
     >
       <Comp attributes={attributes}>
-        {node.blocks?.map((child, i) => (
+        {normalizeBlocks(node.blocks).map((child, i) => (
           <RenderNode key={child.id ?? i} node={child} path={`${path}.${i}`} />
         ))}
       </Comp>
