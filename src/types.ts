@@ -15,6 +15,10 @@ export interface AttrSpec {
     // storefront API (value = the entity's handle).
     | 'collection'
     | 'product'
+    // Media-library picker — the editor opens the store's central media
+    // library (browse or upload). Value is a plain URL string, so section
+    // components consume it exactly like 'url'.
+    | 'image'
   default?: unknown
   label?: string
   /** For type 'select' — the editor renders these as dropdown options. */
