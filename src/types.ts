@@ -2,9 +2,23 @@ import type { FC, ReactNode } from 'react'
 
 /** A single editor-facing setting (= a section attribute). */
 export interface AttrSpec {
-  type: 'text' | 'textarea' | 'color' | 'number' | 'url' | 'boolean'
+  type:
+    | 'text'
+    | 'textarea'
+    | 'color'
+    | 'number'
+    | 'url'
+    | 'boolean'
+    | 'select'
+    | 'richtext'
+    // Catalogue pickers — the editor renders these as dropdowns fed by the
+    // storefront API (value = the entity's handle).
+    | 'collection'
+    | 'product'
   default?: unknown
   label?: string
+  /** For type 'select' — the editor renders these as dropdown options. */
+  options?: { value: string; label: string }[]
 }
 
 /** Props every section component receives. `attributes` are resolved (defaults applied). */
