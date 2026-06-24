@@ -3,6 +3,14 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Framework for Tanqory React themes — block registry, JSON-tree renderer, data layer, mount(). Themes depend on this and only author blocks/ + pages/.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tanqory/tanqory-platform-studio-new.git",
+    "directory": "packages/theme-kit"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "files": ["dist"],
   "main": "./dist/index.js",
   "module": "./dist/index.js",

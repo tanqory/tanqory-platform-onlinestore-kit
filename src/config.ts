@@ -3,7 +3,11 @@ export interface ThemeConfig {
   routes: Record<string, string>
   data: {
     mode: 'mock' | 'live'
+    /** Cell store-api base, e.g. https://api-do-sgp1.tanqory.com (live mode). */
     endpoint?: string | undefined
+    /** Store UUID to preview against (live mode). */
+    storeId?: string | undefined
+    /** Publishable storefront token — `x-publishable-key` (live mode, optional). */
     token?: string | undefined
   }
   tokens?: string
