@@ -154,10 +154,17 @@ export function collectBoundIdentifiers(
       out[root].push({ namespace, key })
     }
   }
-  const walk = (list?: Array<{ settings?: Record<string, unknown>; blocks?: unknown[] }>): void => {
-    for (const node of list ?? []) {
+  // Sections + blocks may store children as an array OR an object map (the
+  // editor's `{ id: node }` shape) — normalize both before iterating.
+  const toNodes = (v: unknown): Array<{ settings?: Record<string, unknown>; blocks?: unknown }> => {
+    if (Array.isArray(v)) return v
+    if (v && typeof v === 'object') return Object.values(v as Record<string, { settings?: Record<string, unknown>; blocks?: unknown }>)
+    return []
+  }
+  const walk = (list?: unknown): void => {
+    for (const node of toNodes(list)) {
       visitSettings(node.settings)
-      walk(node.blocks as typeof list)
+      walk(node.blocks)
     }
   }
   walk(nodes)
