@@ -1,4 +1,17 @@
 import { createContext, useContext, type ReactNode } from 'react'
+import {
+  type StorefrontExtensions,
+  type Menu,
+  type MenuItem,
+  type MenuItemType,
+  type Article,
+  type Blog,
+  type Shop,
+  createStorefrontMethods,
+  BOOTSTRAP_SHOP_MENU,
+  BOOTSTRAP_SHOP_MENU_FRAGMENTS,
+  readBootstrapShopMenu,
+} from './storefront'
 
 export interface Money {
   amount: string
@@ -8,13 +21,71 @@ export interface ProductOption {
   name: string
   values: string[]
 }
+export interface ImageRef {
+  url: string
+  altText?: string
+}
+/** SEO snapshot (Product/Page/Article). */
+export interface Seo {
+  title?: string | null
+  description?: string | null
+}
+/** Per-variant cart quantity bounds (wholesale / case-of-N). Storefront cart enforces these. */
+export interface QuantityRule {
+  minimum: number
+  maximum: number | null
+  increment: number
+}
+/** Per-unit pricing ("$2.50 / 100ml"). */
+export interface UnitPriceMeasurement {
+  measuredType: string
+  quantityValue: number
+  quantityUnit: string
+  referenceValue: number
+  referenceUnit: string
+}
+/** Pickup / in-store stock for one location. */
+export interface StoreAvailability {
+  available: boolean
+  quantityAvailable: number
+  pickUpTime?: string | null
+  location: { id: string; name: string }
+}
+export interface SellingPlanOption {
+  name: string
+  value: string
+}
+export interface SellingPlan {
+  id: string
+  name: string
+  description?: string | null
+  recurringDeliveries: boolean
+  options: SellingPlanOption[]
+}
+export interface SellingPlanGroup {
+  name: string
+  appName?: string | null
+  options: Array<{ name: string; values: string[] }>
+  sellingPlans: SellingPlan[]
+}
 export interface ProductVariant {
   id: string
   title: string
   price: Money
+  /** "Was" price — present when the variant is on sale (compareAtPrice > price). */
+  compareAtPrice?: Money | null
   availableForSale: boolean
   selectedOptions?: { name: string; value: string }[]
-  image?: { url: string; altText?: string } | null
+  image?: ImageRef | null
+  /** Stock-keeping unit. Only after `fetchProduct()`. */
+  sku?: string | null
+  /** Cart quantity bounds (min/max/increment). */
+  quantityRule?: QuantityRule
+  /** Per-unit price ("$2.50 / 100ml") for measured products. */
+  unitPrice?: Money | null
+  unitPriceMeasurement?: UnitPriceMeasurement | null
+  /** Pickup availability per location (only after `fetchProduct()`). */
+  storeAvailability?: StoreAvailability[]
 }
 export interface Product {
   /** Storefront GraphQL node id (present for live data). */
@@ -22,17 +93,31 @@ export interface Product {
   handle: string
   title: string
   price: Money
-  featuredImage?: { url: string; altText?: string } | null
+  /** Range "was" price (max compareAtPrice across variants) — sale badge on cards. */
+  compareAtPrice?: Money | null
+  featuredImage?: ImageRef | null
   /** Default purchasable variant id (`firstAvailableVariant`) — enough to add
    *  to cart from a grid/card without loading the full variant list. */
   variantId?: string
   availableForSale?: boolean
+  /** Catalog facets (card badges / filtering). Present from boot. */
+  vendor?: string | null
+  productType?: string | null
+  tags?: string[]
   /** Long description — only populated by `fetchProduct()` (PDP). */
   description?: string
+  /** Image gallery — only after `fetchProduct()` (PDP). */
+  images?: ImageRef[]
   /** Option definitions (Size, Color…) — only after `fetchProduct()`. */
   options?: ProductOption[]
   /** Full variant list — only after `fetchProduct()` (PDP). */
   variants?: ProductVariant[]
+  /** Subscription / selling-plan groups — only after `fetchProduct()`. */
+  sellingPlanGroups?: SellingPlanGroup[]
+  /** Requested custom metafields ("namespace.key" → value) — pass identifiers to fetchProduct(). */
+  metafields?: Record<string, string | null>
+  /** SEO override — only after `fetchProduct()`. */
+  seo?: Seo | null
 }
 export interface Collection {
   handle: string
@@ -40,6 +125,8 @@ export interface Collection {
   /** Optional hero image; falls back to first product's featuredImage. */
   image?: { url?: string; altText?: string } | null
   products: Product[]
+  /** Custom metafields ("namespace.key" → value) for dynamic sources. */
+  metafields?: Record<string, string | null>
 }
 export interface Page {
   handle: string
@@ -52,8 +139,16 @@ export interface Page {
   updatedAt?: string
 }
 
-/** The data interface every block consumes. Themes provide an implementation. */
-export interface DataApi {
+/**
+ * The data interface every block consumes. Themes provide an implementation.
+ *
+ * Core read methods (collections/products/pages/localization) are always
+ * present. The Shopify-compatible extensions (shop, menus, search, blog,
+ * recommendations, metaobjects, customer account) come from `StorefrontExtensions`
+ * and are LIVE-ONLY — undefined under mock data, so themes feature-detect them
+ * (`data.search?.(...)`, `data.customer?.login(...)`).
+ */
+export interface DataApi extends StorefrontExtensions {
   collectionByHandle: (handle: string) => Collection | null
   /** All known collections (used by CollectionList). */
   allCollections: () => Collection[]
@@ -86,7 +181,26 @@ export interface DataApi {
    * product page's variant picker). Live data hits the backend; mock data
    * resolves synchronously from the prefetched cache. Returns null if missing.
    */
-  fetchProduct?: (handle: string) => Promise<Product | null>
+  fetchProduct?: (
+    handle: string,
+    opts?: { metafields?: Array<{ namespace: string; key: string }> },
+  ) => Promise<Product | null>
+  /**
+   * Fetch the shop's custom metafields by identifier (for dynamic sources).
+   * Live data queries `shop { metafields(identifiers) }`; mock data returns {}
+   * (no metafields offline). Result keys are "namespace.key".
+   */
+  fetchShopMetafields?: (
+    identifiers: Array<{ namespace: string; key: string }>,
+  ) => Promise<Record<string, string | null>>
+  /**
+   * Fetch a collection's custom metafields by identifier (for dynamic sources).
+   * Result keys are "namespace.key".
+   */
+  fetchCollectionMetafields?: (
+    handle: string,
+    identifiers: Array<{ namespace: string; key: string }>,
+  ) => Promise<Record<string, string | null>>
 }
 
 /** Country/market shape mirrored from storefront GraphQL `Localization`. */
@@ -106,11 +220,25 @@ export interface LocalizedCountry {
   currency: LocalizedCurrency
   market: LocalizedMarket | null
 }
+/** A language the store has published (dashboard → Markets / Languages). */
+export interface LocalizedLanguage {
+  isoCode: string
+  name: string
+}
 export interface Localization {
   /** Currently-active country (resolved from the request's X-Tanqory-Country). */
   country: LocalizedCountry
   /** Every country the store has an active Market for — what the picker shows. */
   availableCountries: LocalizedCountry[]
+  /**
+   * Currently-active language + every language the store has PUBLISHED. These
+   * are STORE/dashboard data (the merchant's published locales), not a theme
+   * config list — the theme only ships the translations. Optional so older live
+   * payloads (countries only) still satisfy the type; the picker falls back to a
+   * single default when absent.
+   */
+  language?: LocalizedLanguage
+  availableLanguages?: LocalizedLanguage[]
 }
 
 const DataContext = createContext<DataApi | null>(null)
@@ -132,17 +260,180 @@ export function createMockData(collections: Collection[]): DataApi {
   // by handle. A product appearing in multiple collections returns the first
   // occurrence — matching the storefront's "canonical product page" semantics.
   const productsByHandle = new Map<string, Product>()
+  const allProducts: Product[] = []
   for (const c of collections) {
     for (const p of c.products) {
-      if (!productsByHandle.has(p.handle)) productsByHandle.set(p.handle, p)
+      if (!productsByHandle.has(p.handle)) {
+        productsByHandle.set(p.handle, p)
+        allProducts.push(p)
+      }
     }
   }
+
+  // ── Offline fixtures so EVERY Shopify-parity object resolves in mock mode ──
+  // The live source (createLiveData) serves these from the Storefront GraphQL
+  // API; mock mode must mirror the same shapes so a developer can build header
+  // menus, blog, search, customer + shop sections fully offline (no store).
+  const mkItem = (id: string, title: string, url: string, type: MenuItemType = 'HTTP'): MenuItem =>
+    ({ id, title, url, type, items: [] })
+  const mkMenu = (handle: string, title: string, items: MenuItem[]): Menu =>
+    ({ id: `mock/menu/${handle}`, handle, title, items })
+
+  const mainMenu = mkMenu('main-menu', 'Main menu', [
+    { ...mkItem('mm-shop', 'Shop', '/collections/all', 'COLLECTIONS'),
+      // submenu: the store's collections, so the header dropdown is real data
+      items: collections.slice(0, 6).map((c, i) => mkItem(`mm-shop-${i}`, c.title, `/collections/${c.handle}`, 'COLLECTION')) },
+    mkItem('mm-collections', 'Collections', '/collections', 'CATALOG'),
+    mkItem('mm-about', 'About', '/pages/about', 'PAGE'),
+    mkItem('mm-journal', 'Journal', '/blogs/news', 'BLOG'),
+  ])
+  const menus = new Map<string, Menu>([
+    ['main-menu', mainMenu],
+    ['footer', mkMenu('footer', 'Footer', [
+      mkItem('fm-privacy', 'Privacy policy', '/policies/privacy-policy', 'SHOP_POLICY'),
+      mkItem('fm-contact', 'Contact', '/pages/contact', 'PAGE'),
+    ])],
+    ['footer-shop', mkMenu('footer-shop', 'Shop', [
+      mkItem('fs-all', 'All products', '/collections/all'),
+      mkItem('fs-new', 'New arrivals', '/collections/new'),
+      mkItem('fs-sale', 'Sale', '/collections/sale'),
+      mkItem('fs-gift', 'Gift cards', '/products/gift-card'),
+    ])],
+    ['footer-help', mkMenu('footer-help', 'Help', [
+      mkItem('fh-contact', 'Contact', '/pages/contact'),
+      mkItem('fh-ship', 'Shipping', '/pages/shipping'),
+      mkItem('fh-returns', 'Returns', '/pages/returns'),
+      mkItem('fh-faq', 'FAQ', '/pages/faq'),
+    ])],
+    ['footer-company', mkMenu('footer-company', 'Company', [
+      mkItem('fc-about', 'About', '/pages/about'),
+      mkItem('fc-journal', 'Journal', '/blogs/news'),
+      mkItem('fc-sustain', 'Sustainability', '/pages/sustainability'),
+      mkItem('fc-press', 'Press', '/pages/press'),
+    ])],
+  ])
+
+  const articles: Article[] = [
+    {
+      id: 'mock/article/welcome',
+      handle: 'welcome',
+      title: 'Welcome to the shop',
+      excerpt: 'A quick hello and what to expect.',
+      contentHtml: '<p>Welcome — this is mock article content for local development.</p>',
+      image: null,
+      author: 'Studio',
+      publishedAt: '2024-01-01T00:00:00.000Z',
+      tags: ['news'],
+      blogHandle: 'news',
+    },
+    {
+      id: 'mock/article/behind-the-design',
+      handle: 'behind-the-design',
+      title: 'Behind the design',
+      excerpt: 'How this starter theme is built.',
+      contentHtml: '<p>Built with Tanqory theme-kit sections.</p>',
+      image: null,
+      author: 'Studio',
+      publishedAt: '2024-01-02T00:00:00.000Z',
+      tags: ['design'],
+      blogHandle: 'news',
+    },
+  ]
+  const blog: Blog = { id: 'mock/blog/news', handle: 'news', title: 'News', articles }
+
+  const shop: Shop = {
+    name: 'nova',
+    description: 'A clean starter storefront powered by Tanqory.',
+    brand: { logo: null, slogan: 'Modern essentials', shortDescription: 'Starter theme' },
+    policies: {
+      privacy: { handle: 'privacy-policy', title: 'Privacy policy', url: '/policies/privacy-policy', body: '<p>Mock privacy policy.</p>' },
+      refund: { handle: 'refund-policy', title: 'Refund policy', url: '/policies/refund-policy', body: '<p>Mock refund policy.</p>' },
+      termsOfService: { handle: 'terms-of-service', title: 'Terms of service', url: '/policies/terms-of-service', body: '<p>Mock terms of service.</p>' },
+      shipping: { handle: 'shipping-policy', title: 'Shipping policy', url: '/policies/shipping-policy', body: '<p>Mock shipping policy.</p>' },
+      subscription: null,
+    },
+  }
+
+  const EMPTY_PI = { hasNextPage: false, hasPreviousPage: false, startCursor: null, endCursor: null }
+  const match = (q: string) => {
+    const needle = q.trim().toLowerCase()
+    return needle ? allProducts.filter((p) => p.title.toLowerCase().includes(needle)) : []
+  }
+
   return {
     collectionByHandle: (handle) => collections.find((c) => c.handle === handle) ?? null,
     allCollections: () => collections,
     productByHandle: (handle) => productsByHandle.get(handle) ?? null,
     pageByHandle: () => null,
-    localization: null,
+    // Localization mirrors what the store DASHBOARD (Markets) would publish —
+    // NOT a theme config list. Countries carry their currency; languages are the
+    // store's published locales. The live source fills this from store-api.
+    localization: {
+      country: { isoCode: 'TH', name: 'Thailand', currency: { isoCode: 'THB', symbol: '฿' }, market: null },
+      availableCountries: [
+        { isoCode: 'TH', name: 'Thailand', currency: { isoCode: 'THB', symbol: '฿' }, market: null },
+        { isoCode: 'US', name: 'United States', currency: { isoCode: 'USD', symbol: '$' }, market: null },
+        { isoCode: 'JP', name: 'Japan', currency: { isoCode: 'JPY', symbol: '¥' }, market: null },
+        { isoCode: 'SG', name: 'Singapore', currency: { isoCode: 'SGD', symbol: 'S$' }, market: null },
+        { isoCode: 'GB', name: 'United Kingdom', currency: { isoCode: 'GBP', symbol: '£' }, market: null },
+      ],
+      language: { isoCode: 'en', name: 'English' },
+      availableLanguages: [
+        { isoCode: 'en', name: 'English' },
+        { isoCode: 'th', name: 'ไทย' },
+        { isoCode: 'ja', name: '日本語' },
+      ],
+    },
+
+    // ── Shopify-parity extensions, served offline from the fixtures above so
+    //    themes built against `useData()` behave the same in mock + live. ──
+    shop,
+    menu: (handle) => menus.get(handle) ?? null,
+    fetchMenu: async (handle) => menus.get(handle) ?? null,
+    search: async (query, opts) => {
+      const types = opts?.types ?? ['PRODUCT', 'PAGE', 'ARTICLE']
+      const products = types.includes('PRODUCT') ? match(query) : []
+      const arts = types.includes('ARTICLE')
+        ? articles.filter((a) => a.title.toLowerCase().includes(query.trim().toLowerCase()))
+        : []
+      return { totalCount: products.length + arts.length, products, pages: [], articles: arts, filters: [], pageInfo: EMPTY_PI }
+    },
+    predictiveSearch: async (query, opts) => {
+      const products = match(query).slice(0, opts?.limit ?? 4)
+      return {
+        queries: products.slice(0, 3).map((p) => p.title),
+        products,
+        collections: collections
+          .filter((c) => c.title.toLowerCase().includes(query.trim().toLowerCase()))
+          .slice(0, 3)
+          .map((c) => ({ handle: c.handle, title: c.title, image: null })),
+        pages: [],
+        articles: [],
+      }
+    },
+    collectionProducts: async (handle, opts) => {
+      const c = collections.find((x) => x.handle === handle)
+      return { products: (c?.products ?? []).slice(0, opts?.first ?? 24), filters: [], pageInfo: EMPTY_PI }
+    },
+    productRecommendations: async (productId) => allProducts.filter((p) => p.id !== productId).slice(0, 4),
+    blogByHandle: async (handle) => (handle === blog.handle ? blog : null),
+    articleByHandle: async (blogHandle, articleHandle) =>
+      blogHandle === blog.handle ? articles.find((a) => a.handle === articleHandle) ?? null : null,
+    metaobject: async () => null,
+    metaobjects: async () => [],
+    customer: {
+      login: async () => ({ token: null, expiresAt: null, errors: ['Customer accounts need live data (mock mode).'] }),
+      logout: async () => {},
+      renew: async () => ({ token: null, expiresAt: null, errors: ['Customer accounts need live data (mock mode).'] }),
+      register: async () => ({ ok: false, errors: ['Customer accounts need live data (mock mode).'] }),
+      get: async () => null,
+      orders: async () => [],
+      orderByLookup: async () => null,
+      createAddress: async () => ({ ok: false, errors: ['mock mode'] }),
+      updateAddress: async () => ({ ok: false, errors: ['mock mode'] }),
+      deleteAddress: async () => ({ ok: false, errors: ['mock mode'] }),
+      setDefaultAddress: async () => ({ ok: false, errors: ['mock mode'] }),
+    },
   }
 }
 
@@ -207,8 +498,31 @@ export interface LiveDataOptions {
 // products but the merchant hasn't built a real collection yet — without it,
 // a brand-new merchant's first Active product would never appear on the
 // storefront (collections-only bootstrap = empty homepage).
+// Shared product-card selection for every grid/list. Scalars + featuredImage +
+// price + compareAtPrice (sale badge) + facets (vendor/type/tags) — all cheap
+// (cost 0–1). Heavy fields (gallery, variants, metafields, sellingPlans,
+// storeAvailability) stay on the PDP query only.
+const PRODUCT_CARD_FIELDS = /* GraphQL */ `
+  fragment ProductCardBoot on Product {
+    id
+    handle
+    title
+    availableForSale
+    vendor
+    productType
+    tags
+    featuredImage { url altText }
+    priceRange { minVariantPrice { amount currencyCode } }
+    compareAtPriceRange { maxVariantPrice { amount currencyCode } }
+    firstAvailableVariant { id }
+  }
+`
+
 const COLLECTIONS_QUERY = /* GraphQL */ `
+  ${BOOTSTRAP_SHOP_MENU_FRAGMENTS}
+  ${PRODUCT_CARD_FIELDS}
   query NovaBootstrap($first: Int!, $productFirst: Int!, $productsTop: Int!, $pageHandle: String) {
+    ${BOOTSTRAP_SHOP_MENU}
     page(handle: $pageHandle) {
       handle
       title
@@ -227,15 +541,7 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
           image { url altText }
           products(first: $productFirst) {
             edges {
-              node {
-                id
-                handle
-                title
-                availableForSale
-                featuredImage { url altText }
-                priceRange { minVariantPrice { amount currencyCode } }
-                firstAvailableVariant { id }
-              }
+              node { ...ProductCardBoot }
             }
           }
         }
@@ -243,15 +549,7 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
     }
     products(first: $productsTop) {
       edges {
-        node {
-          id
-          handle
-          title
-          availableForSale
-          featuredImage { url altText }
-          priceRange { minVariantPrice { amount currencyCode } }
-          firstAvailableVariant { id }
-        }
+        node { ...ProductCardBoot }
       }
     }
     localization {
@@ -267,6 +565,8 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
         currency { isoCode name symbol }
         market { id handle name }
       }
+      language { isoCode name }
+      availableLanguages { isoCode name }
     }
   }
 `
@@ -278,8 +578,12 @@ interface GqlProductNode {
   handle: string
   title: string
   availableForSale?: boolean
+  vendor?: string | null
+  productType?: string | null
+  tags?: string[]
   featuredImage?: GqlImg
   priceRange?: { minVariantPrice?: GqlMoney }
+  compareAtPriceRange?: { maxVariantPrice?: GqlMoney } | null
   firstAvailableVariant?: { id: string } | null
 }
 interface GqlCollectionNode {
@@ -305,7 +609,13 @@ interface BootstrapData {
   localization: {
     country: LocalizedCountry
     availableCountries: LocalizedCountry[]
+    language?: LocalizedLanguage
+    availableLanguages?: LocalizedLanguage[]
   }
+  /** Shop info + the two standard menus — parsed by readBootstrapShopMenu. */
+  shop?: unknown
+  mainMenu?: unknown
+  footerMenu?: unknown
 }
 
 function normalizeImage(img: GqlImg): { url: string; altText?: string } | null {
@@ -317,12 +627,21 @@ function normalizeImage(img: GqlImg): { url: string; altText?: string } | null {
 }
 
 function normalizeProduct(p: GqlProductNode): Product {
+  const price = p.priceRange?.minVariantPrice ?? { amount: '0', currencyCode: 'USD' }
+  // Only surface compareAtPrice when it's a REAL sale (was > now) — the backend
+  // returns the range even when equal, which would render a pointless strikethrough.
+  const compareAt = p.compareAtPriceRange?.maxVariantPrice
+  const onSale = compareAt && Number(compareAt.amount) > Number(price.amount)
   return {
     id: p.id,
     handle: p.handle,
     title: p.title,
-    price: p.priceRange?.minVariantPrice ?? { amount: '0', currencyCode: 'USD' },
+    price,
     featuredImage: normalizeImage(p.featuredImage),
+    ...(onSale ? { compareAtPrice: compareAt } : {}),
+    ...(p.vendor ? { vendor: p.vendor } : {}),
+    ...(p.productType ? { productType: p.productType } : {}),
+    ...(p.tags?.length ? { tags: p.tags } : {}),
     ...(p.firstAvailableVariant?.id ? { variantId: p.firstAvailableVariant.id } : {}),
     ...(typeof p.availableForSale === 'boolean' ? { availableForSale: p.availableForSale } : {}),
   }
@@ -341,26 +660,51 @@ function normalizeCollection(c: GqlCollectionNode): Collection {
 // Kept out of the bootstrap (variants(first:100) @cost=100/product would blow
 // the cost budget) and fetched lazily only on the product page.
 const PRODUCT_QUERY = /* GraphQL */ `
-  query NovaProduct($handle: String!) {
+  query NovaProduct($handle: String!, $identifiers: [MetafieldIdentifier!]!) {
     product(handle: $handle) {
       id
       handle
       title
       description
+      vendor
+      productType
+      tags
       availableForSale
       featuredImage { url altText }
+      images(first: 20) { nodes { url altText } }
       priceRange { minVariantPrice { amount currencyCode } }
+      compareAtPriceRange { maxVariantPrice { amount currencyCode } }
       options(first: 10) { name values }
+      seo { title description }
       variants(first: 100) {
         nodes {
           id
           title
           availableForSale
+          sku
           price { amount currencyCode }
+          compareAtPrice { amount currencyCode }
           image { url altText }
           selectedOptions { name value }
+          unitPrice { amount currencyCode }
+          unitPriceMeasurement { measuredType quantityValue quantityUnit referenceValue referenceUnit }
+          quantityRule { minimum maximum increment }
+          storeAvailability(first: 10) {
+            nodes { available quantityAvailable pickUpTime location { id name } }
+          }
         }
       }
+      sellingPlanGroups(first: 5) {
+        nodes {
+          name
+          appName
+          options { name values }
+          sellingPlans(first: 10) {
+            nodes { id name description recurringDeliveries options { name value } }
+          }
+        }
+      }
+      metafields(identifiers: $identifiers) { namespace key value }
       firstAvailableVariant { id }
     }
   }
@@ -370,14 +714,43 @@ interface GqlVariantNode {
   id: string
   title: string
   availableForSale: boolean
+  sku?: string | null
   price?: GqlMoney
+  compareAtPrice?: GqlMoney | null
   image?: GqlImg
   selectedOptions?: Array<{ name: string; value: string }>
+  unitPrice?: GqlMoney | null
+  unitPriceMeasurement?: UnitPriceMeasurement | null
+  quantityRule?: QuantityRule
+  storeAvailability?: {
+    nodes: Array<{
+      available: boolean
+      quantityAvailable: number
+      pickUpTime?: string | null
+      location: { id: string; name: string }
+    }>
+  }
+}
+interface GqlSellingPlanGroupNode {
+  name: string
+  appName?: string | null
+  options?: Array<{ name: string; values: string[] }>
+  sellingPlans?: { nodes: Array<{
+    id: string
+    name: string
+    description?: string | null
+    recurringDeliveries: boolean
+    options?: Array<{ name: string; value: string }>
+  }> }
 }
 interface GqlProductDetailNode extends GqlProductNode {
   description?: string | null
+  images?: { nodes: GqlImg[] }
   options?: Array<{ name: string; values: string[] }>
+  seo?: { title?: string | null; description?: string | null } | null
   variants?: { nodes: GqlVariantNode[] }
+  sellingPlanGroups?: { nodes: GqlSellingPlanGroupNode[] }
+  metafields?: Array<{ namespace: string; key: string; value: string | null } | null>
 }
 
 function normalizeProductDetail(p: GqlProductDetailNode): Product {
@@ -386,15 +759,55 @@ function normalizeProductDetail(p: GqlProductDetailNode): Product {
     id: v.id,
     title: v.title,
     price: v.price ?? base.price,
+    ...(v.compareAtPrice && Number(v.compareAtPrice.amount) > Number((v.price ?? base.price).amount)
+      ? { compareAtPrice: v.compareAtPrice }
+      : {}),
     availableForSale: v.availableForSale,
+    ...(v.sku ? { sku: v.sku } : {}),
     ...(v.selectedOptions?.length ? { selectedOptions: v.selectedOptions } : {}),
     image: normalizeImage(v.image),
+    ...(v.unitPrice ? { unitPrice: v.unitPrice } : {}),
+    ...(v.unitPriceMeasurement ? { unitPriceMeasurement: v.unitPriceMeasurement } : {}),
+    ...(v.quantityRule ? { quantityRule: v.quantityRule } : {}),
+    ...(v.storeAvailability?.nodes?.length
+      ? {
+          storeAvailability: v.storeAvailability.nodes.map((s) => ({
+            available: s.available,
+            quantityAvailable: s.quantityAvailable,
+            pickUpTime: s.pickUpTime ?? null,
+            location: s.location,
+          })),
+        }
+      : {}),
   }))
+  const images: ImageRef[] = (p.images?.nodes ?? [])
+    .map(normalizeImage)
+    .filter((i): i is ImageRef => i !== null)
+  const sellingPlanGroups: SellingPlanGroup[] = (p.sellingPlanGroups?.nodes ?? []).map((g) => ({
+    name: g.name,
+    appName: g.appName ?? null,
+    options: g.options ?? [],
+    sellingPlans: (g.sellingPlans?.nodes ?? []).map((sp) => ({
+      id: sp.id,
+      name: sp.name,
+      description: sp.description ?? null,
+      recurringDeliveries: sp.recurringDeliveries,
+      options: sp.options ?? [],
+    })),
+  }))
+  const metafields: Record<string, string | null> = {}
+  for (const m of p.metafields ?? []) {
+    if (m) metafields[`${m.namespace}.${m.key}`] = m.value
+  }
   return {
     ...base,
     ...(p.description ? { description: p.description } : {}),
+    ...(images.length ? { images } : {}),
     ...(p.options?.length ? { options: p.options } : {}),
+    ...(p.seo ? { seo: { title: p.seo.title ?? null, description: p.seo.description ?? null } } : {}),
     ...(variants.length ? { variants } : {}),
+    ...(sellingPlanGroups.length ? { sellingPlanGroups } : {}),
+    ...(Object.keys(metafields).length ? { metafields } : {}),
   }
 }
 
@@ -511,19 +924,74 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
     // that doesn't match what the merchant has configured.
     data.localization =
       loc.availableCountries.length > 0
-        ? { country: loc.country, availableCountries: loc.availableCountries }
+        ? {
+            country: loc.country,
+            availableCountries: loc.availableCountries,
+            // Published languages come straight from the store (StoreLanguage →
+            // SDL `availableLanguages`); the theme just renders the picker.
+            language: loc.language,
+            availableLanguages: loc.availableLanguages,
+          }
         : null
   }
 
   // Post-boot capabilities: the raw GraphQL escape hatch (cart mutations live
   // on top of this) and an on-demand single-product fetch (PDP variant picker).
   data.graphql = graphqlRequest
-  data.fetchProduct = async (handle: string): Promise<Product | null> => {
+  data.fetchProduct = async (
+    handle: string,
+    fpOpts?: { metafields?: Array<{ namespace: string; key: string }> },
+  ): Promise<Product | null> => {
     const res = await graphqlRequest<{ product: GqlProductDetailNode | null }>(PRODUCT_QUERY, {
       handle,
+      identifiers: fpOpts?.metafields ?? [],
     })
     return res?.product ? normalizeProductDetail(res.product) : null
   }
+
+  // Dynamic-source metafields for the shop + a collection. Both query the
+  // storefront's `metafields(identifiers)` (Shop/Collection both expose it) and
+  // flatten to a "namespace.key" → value map the resolver reads.
+  type GqlMf = { namespace: string; key: string; value: string | null } | null
+  const toMfMap = (arr: GqlMf[] | undefined): Record<string, string | null> => {
+    const out: Record<string, string | null> = {}
+    for (const m of arr ?? []) if (m) out[`${m.namespace}.${m.key}`] = m.value
+    return out
+  }
+  data.fetchShopMetafields = async (identifiers) => {
+    if (!identifiers.length) return {}
+    const res = await graphqlRequest<{ shop: { metafields: GqlMf[] } | null }>(
+      `query NovaShopMetafields($identifiers: [MetafieldIdentifier!]!) {
+        shop { metafields(identifiers: $identifiers) { namespace key value } }
+      }`,
+      { identifiers },
+    )
+    return toMfMap(res?.shop?.metafields)
+  }
+  data.fetchCollectionMetafields = async (handle, identifiers) => {
+    if (!identifiers.length || !handle) return {}
+    const res = await graphqlRequest<{ collection: { metafields: GqlMf[] } | null }>(
+      `query NovaCollectionMetafields($handle: String!, $identifiers: [MetafieldIdentifier!]!) {
+        collection(handle: $handle) { metafields(identifiers: $identifiers) { namespace key value } }
+      }`,
+      { handle, identifiers },
+    )
+    return toMfMap(res?.collection?.metafields)
+  }
+
+  // ─── Shopify-compatible storefront extensions ───────────────────
+  // Shop info + the two standard menus came back in the bootstrap → expose
+  // them synchronously (the layout's header/footer render at hydration).
+  const { shop, menus } = readBootstrapShopMenu(boot)
+  data.shop = shop
+  data.menu = (handle: string) => menus.get(handle) ?? null
+  // The rest (search, blog, recommendations, metaobjects, customer account)
+  // are lazy — attach them on the same requester. fetchMenu shares `menus` so
+  // a later fetch warms the same cache the sync menu() reads.
+  Object.assign(
+    data,
+    createStorefrontMethods(graphqlRequest, { normalizeProduct }, menus),
+  )
   return data
 }
 

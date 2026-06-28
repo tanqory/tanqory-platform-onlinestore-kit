@@ -53,12 +53,33 @@ export interface CartLine {
   productHandle?: string
 }
 
+/** A discount code applied to the cart (`applicable=false` when it didn't qualify). */
+export interface AppliedDiscountCode {
+  code: string
+  applicable: boolean
+}
+/** A gift card applied to the cart — masked (only last 4 chars ever leave the API). */
+export interface AppliedGiftCard {
+  id: string
+  lastCharacters: string
+  amountUsed: Money
+  balance: Money
+}
+
 export interface CartState {
   id: string | null
   lines: CartLine[]
   subtotal: Money
+  /** Final amount after discounts + gift cards (cost.totalAmount). */
+  total: Money
   totalQuantity: number
   checkoutUrl: string | null
+  /** Discount codes applied to the cart. */
+  discountCodes: AppliedDiscountCode[]
+  /** Total savings across all discount allocations — null when nothing's discounted. */
+  discountAmount: Money | null
+  /** Gift cards applied to the cart. */
+  appliedGiftCards: AppliedGiftCard[]
   /** True while a mutation/bootstrap is in flight. */
   loading: boolean
   /** True once the client has hydrated cart state post-mount. */
@@ -84,6 +105,12 @@ export interface CartApi extends CartState {
   updateQuantity: (lineId: string, quantity: number) => Promise<void>
   remove: (lineId: string) => Promise<void>
   clear: () => Promise<void>
+  /** Apply discount codes (replaces the current set; [] clears them). LIVE only. */
+  applyDiscountCodes: (codes: string[]) => Promise<void>
+  /** Apply gift card codes to the cart. LIVE only. */
+  applyGiftCardCodes: (codes: string[]) => Promise<void>
+  /** Remove applied gift cards by id. LIVE only. */
+  removeGiftCards: (ids: string[]) => Promise<void>
 }
 
 // ─── Money helpers (amounts are decimal strings) ──────────────────
@@ -113,6 +140,18 @@ const CART_FRAGMENT = /* GraphQL */ `
     cost {
       subtotalAmount { amount currencyCode }
       totalAmount { amount currencyCode }
+    }
+    discountCodes { code applicable }
+    discountAllocations {
+      ... on CartCodeDiscountAllocation { code discountedAmount { amount currencyCode } }
+      ... on CartAutomaticDiscountAllocation { title discountedAmount { amount currencyCode } }
+      ... on CartCustomDiscountAllocation { title discountedAmount { amount currencyCode } }
+    }
+    appliedGiftCards {
+      id
+      lastCharacters
+      amountUsed { amount currencyCode }
+      balance { amount currencyCode }
     }
     lines(first: 100) {
       nodes {
@@ -163,12 +202,44 @@ const CART_LINES_REMOVE = /* GraphQL */ `
   }
   ${CART_FRAGMENT}
 `
+const CART_DISCOUNT_CODES = /* GraphQL */ `
+  mutation CartDiscountCodesUpdate($cartId: ID!, $discountCodes: [String!]) {
+    cartDiscountCodesUpdate(cartId: $cartId, discountCodes: $discountCodes) {
+      cart { ...CartFields } userErrors { message }
+    }
+  }
+  ${CART_FRAGMENT}
+`
+const CART_GIFTCARD_UPDATE = /* GraphQL */ `
+  mutation CartGiftCardCodesUpdate($cartId: ID!, $giftCardCodes: [String!]!) {
+    cartGiftCardCodesUpdate(cartId: $cartId, giftCardCodes: $giftCardCodes) {
+      cart { ...CartFields } userErrors { message }
+    }
+  }
+  ${CART_FRAGMENT}
+`
+const CART_GIFTCARD_REMOVE = /* GraphQL */ `
+  mutation CartGiftCardCodesRemove($cartId: ID!, $appliedGiftCardIds: [ID!]!) {
+    cartGiftCardCodesRemove(cartId: $cartId, appliedGiftCardIds: $appliedGiftCardIds) {
+      cart { ...CartFields } userErrors { message }
+    }
+  }
+  ${CART_FRAGMENT}
+`
 
 interface GqlCart {
   id: string
   checkoutUrl: string
   totalQuantity: number
   cost: { subtotalAmount: Money; totalAmount: Money }
+  discountCodes?: Array<{ code: string; applicable: boolean }>
+  discountAllocations?: Array<{ discountedAmount: Money; code?: string; title?: string }>
+  appliedGiftCards?: Array<{
+    id: string
+    lastCharacters: string
+    amountUsed: Money
+    balance: Money
+  }>
   lines: {
     nodes: Array<{
       id: string
@@ -218,12 +289,31 @@ function normalizeCart(c: GqlCart): Omit<CartState, 'loading' | 'ready' | 'error
       ...(m.product?.handle ? { productHandle: m.product.handle } : {}),
     }
   })
+  const subtotal = c.cost?.subtotalAmount ?? sumLines(lines)
+  // Sum every discount allocation (code + automatic) into one "you saved" figure.
+  const allocations = c.discountAllocations ?? []
+  const discountAmount =
+    allocations.length > 0
+      ? money(
+          allocations.reduce((acc, a) => acc + Number(a.discountedAmount.amount), 0),
+          allocations[0].discountedAmount.currencyCode,
+        )
+      : null
   return {
     id: c.id,
     lines,
-    subtotal: c.cost?.subtotalAmount ?? sumLines(lines),
+    subtotal,
+    total: c.cost?.totalAmount ?? subtotal,
     totalQuantity: c.totalQuantity ?? countQty(lines),
     checkoutUrl: c.checkoutUrl ?? null,
+    discountCodes: (c.discountCodes ?? []).map((d) => ({ code: d.code, applicable: d.applicable })),
+    discountAmount,
+    appliedGiftCards: (c.appliedGiftCards ?? []).map((g) => ({
+      id: g.id,
+      lastCharacters: g.lastCharacters,
+      amountUsed: g.amountUsed,
+      balance: g.balance,
+    })),
   }
 }
 
@@ -233,8 +323,12 @@ const EMPTY: CartState = {
   id: null,
   lines: [],
   subtotal: { amount: '0.00', currencyCode: DEFAULT_CURRENCY },
+  total: { amount: '0.00', currencyCode: DEFAULT_CURRENCY },
   totalQuantity: 0,
   checkoutUrl: null,
+  discountCodes: [],
+  discountAmount: null,
+  appliedGiftCards: [],
   loading: false,
   ready: false,
   error: null,
@@ -282,6 +376,7 @@ export function CartProvider({ children }: { children: ReactNode }): JSX.Element
       ...s,
       lines,
       subtotal: sumLines(lines),
+      total: sumLines(lines),
       totalQuantity: countQty(lines),
       loading: false,
       error: null,
@@ -436,7 +531,51 @@ export function CartProvider({ children }: { children: ReactNode }): JSX.Element
     }
   }, [isLive, gql, applyCart, setLocal])
 
-  const value: CartApi = { ...state, add, updateQuantity, remove, clear }
+  // Shared runner for the discount/gift-card mutations — all return the updated
+  // cart + userErrors, all reconcile via applyCart. LIVE-only (cart-level
+  // promotions need the backend; the MOCK driver has no concept of them).
+  const runCartMutation = useCallback(
+    async (query: string, field: string, variables: Record<string, unknown>) => {
+      if (!isLive || !gql || !ref.current.id) return
+      setState((s) => ({ ...s, loading: true }))
+      try {
+        const res = await gql<Record<string, CartMutationPayload>>(query, {
+          cartId: ref.current.id,
+          ...variables,
+        })
+        const payload = res[field]
+        if (payload?.cart) applyCart(payload.cart)
+        else throw new Error(payload?.userErrors[0]?.message ?? 'Cart update failed')
+      } catch (e) {
+        setState((s) => ({ ...s, loading: false, error: (e as Error).message }))
+      }
+    },
+    [isLive, gql, applyCart],
+  )
+
+  const applyDiscountCodes = useCallback<CartApi['applyDiscountCodes']>(
+    (codes) => runCartMutation(CART_DISCOUNT_CODES, 'cartDiscountCodesUpdate', { discountCodes: codes }),
+    [runCartMutation],
+  )
+  const applyGiftCardCodes = useCallback<CartApi['applyGiftCardCodes']>(
+    (codes) => runCartMutation(CART_GIFTCARD_UPDATE, 'cartGiftCardCodesUpdate', { giftCardCodes: codes }),
+    [runCartMutation],
+  )
+  const removeGiftCards = useCallback<CartApi['removeGiftCards']>(
+    (ids) => runCartMutation(CART_GIFTCARD_REMOVE, 'cartGiftCardCodesRemove', { appliedGiftCardIds: ids }),
+    [runCartMutation],
+  )
+
+  const value: CartApi = {
+    ...state,
+    add,
+    updateQuantity,
+    remove,
+    clear,
+    applyDiscountCodes,
+    applyGiftCardCodes,
+    removeGiftCards,
+  }
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>
 }
 

@@ -90,6 +90,64 @@ export function PreviewBridge({
       } else if (e.data.type === 'tanqory-preview-select') {
         const id = e.data.sectionId as string
         setTree((t) => { const i = t.findIndex((n) => n.id === id); setSelected(i >= 0 ? [i] : null); return t })
+        // Scroll the canvas to the clicked section (editor tree → preview, like
+        // Shopify). The section wrapper is `display:contents` (no layout box), so
+        // scroll its first real child element into view instead.
+        if (typeof document !== 'undefined' && id) {
+          const sel = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id
+          requestAnimationFrame(() => {
+            const wrap = document.querySelector(`[data-tq-section-id="${sel}"]`)
+            const target = (wrap?.firstElementChild as HTMLElement | null) ?? (wrap as HTMLElement | null)
+            target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          })
+        }
+      } else if (e.data.type === 'tanqory-preview-reorder-sections') {
+        // Reorder the EXISTING nodes in place (same object refs, keyed by id)
+        // so React moves the DOM instead of rebuilding the whole tree — this is
+        // what kills the flicker on drag/swap. A full `tq:set-content` would
+        // re-mount every section. Any node the editor didn't list is preserved.
+        const order = e.data.order as string[]
+        if (Array.isArray(order)) {
+          setTree((t) => {
+            const byId = new Map(t.map((n) => [n.id, n]))
+            const next = order.map((id) => byId.get(id)).filter(Boolean) as ContentNode[]
+            for (const n of t) if (!order.includes(n.id as string)) next.push(n)
+            return next.length ? next : t
+          })
+        }
+      } else if (e.data.type === 'tanqory-preview-remove-section') {
+        const id = e.data.sectionId as string
+        setTree((t) => t.filter((n) => n.id !== id))
+      } else if (e.data.type === 'tanqory-preview-insert-section') {
+        // Splice ONE new node in after `afterSectionId` (or at the top) — no
+        // full-tree replace. Blocks arrive as the editor's id-map + order array;
+        // convert to theme-kit's array shape (same as update-section).
+        const id = e.data.sectionId as string
+        const rawBlocks = e.data.blocks as Record<string, ContentNode> | ContentNode[] | null
+        const order = e.data.order as string[] | null
+        let blocks: ContentNode[] | undefined
+        if (Array.isArray(rawBlocks)) {
+          blocks = rawBlocks
+        } else if (rawBlocks && typeof rawBlocks === 'object') {
+          const ids = Array.isArray(order) && order.length ? order : Object.keys(rawBlocks)
+          blocks = ids
+            .filter((bid) => rawBlocks[bid])
+            .map((bid) => ({ ...rawBlocks[bid], id: rawBlocks[bid].id ?? bid }))
+        }
+        const node: ContentNode = {
+          id,
+          type: e.data.sectionType as string,
+          settings: (e.data.settings ?? {}) as Record<string, unknown>,
+          ...(blocks ? { blocks } : {}),
+        }
+        const after = e.data.afterSectionId as string | null
+        setTree((t) => {
+          if (t.some((n) => n.id === id)) return t
+          const idx = after ? t.findIndex((n) => n.id === after) : -1
+          const next = [...t]
+          next.splice(idx + 1, 0, node)
+          return next
+        })
       } else if (e.data.type === 'tanqory-request-collections') {
         // Editor needs to populate a `type: 'collection'` picker — reply with
         // every collection the bootstrap query loaded so the merchant sees

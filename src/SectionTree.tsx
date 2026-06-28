@@ -16,12 +16,40 @@ function resolveAttributes(def: SectionDef, settings?: Record<string, unknown>):
  *  object crashed the ENTIRE storefront render ("o.map is not a function").
  *  A malformed template must degrade to "blocks don't render", never to a
  *  dead page. */
-function normalizeBlocks(blocks: ContentNode['blocks'] | Record<string, ContentNode>): ContentNode[] {
+function normalizeBlocks(
+  blocks: ContentNode['blocks'] | Record<string, ContentNode>,
+  order?: string[],
+): ContentNode[] {
   if (Array.isArray(blocks)) return blocks
   if (blocks && typeof blocks === 'object') {
-    return Object.entries(blocks)
-      .filter(([, b]) => b && typeof b === 'object' && typeof (b as ContentNode).type === 'string')
-      .map(([id, b]) => ({ ...(b as ContentNode), id: (b as ContentNode).id ?? id }))
+    // Build the node list + a lookup keyed by BOTH the map key and the block's
+    // own id — the editor's `order` array references the map key ("0".."n"),
+    // but be tolerant of templates that order by block id.
+    const nodes: ContentNode[] = []
+    const byRef = new Map<string, ContentNode>()
+    for (const [key, raw] of Object.entries(blocks)) {
+      if (!raw || typeof raw !== 'object' || typeof (raw as ContentNode).type !== 'string') continue
+      const node = { ...(raw as ContentNode), id: (raw as ContentNode).id ?? key }
+      nodes.push(node)
+      byRef.set(key, node)
+      if (node.id) byRef.set(node.id as string, node)
+    }
+    // The map's key order is NOT the merchant's arrangement — the editor stores
+    // the real order in `order`. Honour it (then append any stragglers).
+    if (Array.isArray(order) && order.length) {
+      const ordered: ContentNode[] = []
+      const used = new Set<ContentNode>()
+      for (const ref of order) {
+        const n = byRef.get(ref)
+        if (n && !used.has(n)) {
+          ordered.push(n)
+          used.add(n)
+        }
+      }
+      for (const n of nodes) if (!used.has(n)) ordered.push(n)
+      return ordered
+    }
+    return nodes
   }
   return []
 }
@@ -54,9 +82,11 @@ function RenderNode({
       style={{ display: 'contents' }}
     >
       <Comp attributes={attributes}>
-        {normalizeBlocks(node.blocks).map((child, i) => (
-          <RenderNode key={child.id ?? i} node={child} path={`${path}.${i}`} />
-        ))}
+        {normalizeBlocks(node.blocks, (node as ContentNode & { order?: string[] }).order).map(
+          (child, i) => (
+            <RenderNode key={child.id ?? i} node={child} path={`${path}.${i}`} />
+          ),
+        )}
       </Comp>
     </div>
   )
