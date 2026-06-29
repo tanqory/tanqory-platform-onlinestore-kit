@@ -169,6 +169,14 @@ export function PreviewBridge({
           productCount: c.products.length,
         }))
         send({ type: 'tanqory-collections', requestId: e.data.requestId ?? null, collections })
+      } else if (e.data.type === 'tanqory-request-menus') {
+        // Editor needs to populate a `type: 'link_list'` picker — reply with
+        // every menu the store has (Dashboard → Navigation), so the merchant
+        // picks a real menu instead of typing a handle.
+        const requestId = e.data.requestId ?? null
+        void Promise.resolve(data.listMenus?.() ?? [])
+          .then((menus) => send({ type: 'tanqory-menus', requestId, menus }))
+          .catch(() => send({ type: 'tanqory-menus', requestId, menus: [] }))
       } else if (e.data.type === 'tanqory-request-products') {
         // Same idea as collections — flatten every product across collections,
         // dedupe by handle (first occurrence wins, matching SectionTree's

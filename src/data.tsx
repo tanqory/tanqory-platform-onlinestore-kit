@@ -153,6 +153,12 @@ export interface DataApi extends StorefrontExtensions {
   /** All known collections (used by CollectionList). */
   allCollections: () => Collection[]
   /**
+   * List every navigation menu the store has (Dashboard → Navigation), for the
+   * editor's `link_list` picker. Identity only (handle/title/count) — fetch a
+   * menu's items with `fetchMenu(handle)`. Optional: older payloads may omit it.
+   */
+  listMenus?: () => Promise<Array<{ handle: string; title: string; itemsCount: number }>>
+  /**
    * Look up a single product by its handle. Returns null when the handle
    * isn't found. Required by FeaturedProduct / ProductDetails sections
    * (ported from the canonical examples/react theme in PR #2).
@@ -390,6 +396,12 @@ export function createMockData(collections: Collection[]): DataApi {
     shop,
     menu: (handle) => menus.get(handle) ?? null,
     fetchMenu: async (handle) => menus.get(handle) ?? null,
+    listMenus: async () =>
+      Array.from(menus.values()).map((m) => ({
+        handle: m.handle,
+        title: m.title,
+        itemsCount: m.items.length,
+      })),
     search: async (query, opts) => {
       const types = opts?.types ?? ['PRODUCT', 'PAGE', 'ARTICLE']
       const products = types.includes('PRODUCT') ? match(query) : []
@@ -1061,6 +1073,14 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
     data,
     createStorefrontMethods(graphqlRequest, { normalizeProduct }, menus),
   )
+  // List every store menu (Dashboard → Navigation) for the editor's link_list
+  // picker — the storefront `menus` query (id/handle/title/itemsCount).
+  data.listMenus = async () => {
+    const res = await graphqlRequest<{
+      menus: Array<{ handle: string; title: string; itemsCount: number }>
+    }>(`query NovaMenus { menus { handle title itemsCount } }`)
+    return res?.menus ?? []
+  }
   return data
 }
 
