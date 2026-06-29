@@ -198,10 +198,12 @@ export function PreviewBridge({
   // editor is open.
   const onClickCapture = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement
-    const sectionEl = target.closest<HTMLElement>('[data-tq-section-id]')
-    if (!sectionEl) return
-    const sectionId = sectionEl.dataset.tqSectionId
-    const pathAttr = sectionEl.dataset.tqPath
+    // The innermost wrapper is the node actually clicked — a child BLOCK when the
+    // click lands inside one (RenderNode wraps every node), otherwise the section.
+    const nodeEl = target.closest<HTMLElement>('[data-tq-section-id]')
+    if (!nodeEl) return
+    const nodeId = nodeEl.dataset.tqSectionId
+    const pathAttr = nodeEl.dataset.tqPath
     if (target.closest('a, button[type="submit"]')) {
       e.preventDefault()
     }
@@ -210,8 +212,20 @@ export function PreviewBridge({
       setSelected(path)
       send({ type: 'tq:select', path })
     }
-    if (sectionId) {
-      send({ type: 'tanqory-section-selected', sectionId })
+    // A nested path (e.g. "3.1") means a child block was clicked — select it
+    // WITHIN its parent section so the editor opens the block's settings, not the
+    // whole section's. Walk up to the enclosing section for its id.
+    const isBlock = !!pathAttr && pathAttr.includes('.')
+    if (isBlock && nodeId) {
+      const sectionEl = nodeEl.parentElement?.closest<HTMLElement>('[data-tq-section-id]')
+      const sectionId = sectionEl?.dataset.tqSectionId
+      if (sectionId) {
+        send({ type: 'tanqory-block-selected', sectionId, blockId: nodeId })
+        return
+      }
+    }
+    if (nodeId) {
+      send({ type: 'tanqory-section-selected', sectionId: nodeId })
     }
   }
 
