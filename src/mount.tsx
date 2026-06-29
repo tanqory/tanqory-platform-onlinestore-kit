@@ -73,41 +73,6 @@ export function mount(opts: MountOptions): void {
   const previewMode = previewHost || on('preview')
   const editMode = on('edit')
 
-  // SINGLE-SECTION preview: the Add-section picker loads this runtime at
-  // `/__editor/preview-section?type=<name>&settings=<base64>` to show ONE
-  // section in isolation (Shopify-style "what does this look like"). Render
-  // just that section — with its preset blocks so block-composed sections
-  // aren't empty — instead of the whole page.
-  const sectionType =
-    typeof location !== 'undefined' && location.pathname === '/__editor/preview-section'
-      ? params.get('type')
-      : null
-  let previewNode: ContentNode | null = null
-  if (sectionType) {
-    const def = defaultsOf<SectionDef>(opts.sections).find((d) => d.name === sectionType)
-    let settings: Record<string, unknown> = {}
-    const raw = params.get('settings')
-    if (raw) {
-      try {
-        settings = JSON.parse(decodeURIComponent(escape(atob(raw))))
-      } catch {
-        /* malformed override → fall back to the section's own defaults */
-      }
-    }
-    const presetBlocks = ((def as { presets?: Array<{ blocks?: ContentNode[] }> } | undefined)
-      ?.presets?.[0]?.blocks ?? []) as ContentNode[]
-    previewNode = {
-      type: sectionType,
-      id: 'preview',
-      settings,
-      blocks: presetBlocks.map((b, i) => ({
-        type: b.type,
-        id: `preview-${i}`,
-        settings: b.settings ?? {},
-      })),
-    } as ContentNode
-  }
-
   // All pages (name → sections) so the editor can switch between templates.
   const pagesByName: Record<string, ContentNode[]> = {}
   for (const [key, mod] of Object.entries(opts.pages)) {
@@ -120,11 +85,7 @@ export function mount(opts: MountOptions): void {
       <DataProvider value={opts.data}>
         <ThemeProvider settings={opts.settings} locale={opts.locale}>
           <CartProvider>
-            {previewNode ? (
-              <Shell>
-                <SectionTree tree={[previewNode]} />
-              </Shell>
-            ) : previewMode ? (
+            {previewMode ? (
               <PreviewBridge pages={pagesByName} initialPage={opts.page ?? 'index'} Shell={Shell} />
             ) : editMode ? (
               <Editor pages={pagesByName} initialPage={opts.page ?? 'index'} />
@@ -142,7 +103,7 @@ export function mount(opts: MountOptions): void {
   // Storefront (SERVE plane) is prerendered to static HTML at build time (SSG,
   // see ssg.tsx) — hydrate it so the markup is reused (no flash, SEO-ready).
   // Preview/edit planes are always client-rendered (not prerendered).
-  const isStorefront = !previewMode && !editMode && !previewNode
+  const isStorefront = !previewMode && !editMode
   if (isStorefront && rootEl.firstChild) {
     hydrateRoot(rootEl, app)
   } else {
