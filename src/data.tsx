@@ -571,6 +571,43 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
   }
 `
 
+// Reduced bootstrap. `localization` and the nested `collections.products` are
+// non-nullable in the storefront schema, so if a cell errors on either (e.g. an
+// older / partially-broken store-api) GraphQL nulls the ENTIRE response and the
+// whole boot falls back to mock. This variant drops both optional pieces so the
+// essentials — shop, menus, page, collections, top products — still load.
+const SAFE_COLLECTIONS_QUERY = /* GraphQL */ `
+  ${BOOTSTRAP_SHOP_MENU_FRAGMENTS}
+  ${PRODUCT_CARD_FIELDS}
+  query NovaBootstrapSafe($first: Int!, $productsTop: Int!, $pageHandle: String) {
+    ${BOOTSTRAP_SHOP_MENU}
+    page(handle: $pageHandle) {
+      handle
+      title
+      body
+      bodySummary
+      author
+      publishedAt
+      updatedAt
+    }
+    collections(first: $first) {
+      edges {
+        node {
+          id
+          handle
+          title
+          image { url altText }
+        }
+      }
+    }
+    products(first: $productsTop) {
+      edges {
+        node { ...ProductCardBoot }
+      }
+    }
+  }
+`
+
 interface GqlMoney { amount: string; currencyCode: string }
 type GqlImg = { url?: string; altText?: string | null } | null | undefined
 interface GqlProductNode {
@@ -652,7 +689,9 @@ function normalizeCollection(c: GqlCollectionNode): Collection {
     handle: c.handle,
     title: c.title,
     image: normalizeImage(c.image),
-    products: c.products.edges.map((e) => normalizeProduct(e.node)),
+    // Nested products are optional — the reduced bootstrap (used when a cell
+    // errors on the nested products field) omits them.
+    products: (c.products?.edges ?? []).map((e) => normalizeProduct(e.node)),
   }
 }
 
@@ -856,17 +895,47 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
     }
     const json = (await res.json()) as { data?: T; errors?: Array<{ message: string }> }
     if (json.errors?.length) {
-      throw new Error(`[theme-kit] GraphQL errors: ${json.errors.map((e) => e.message).join('; ')}`)
+      const msg = json.errors.map((e) => e.message).join('; ')
+      // Partial success: GraphQL nulls the failed field(s) but still returns the
+      // rest of `data`. Only fail hard when NOTHING came back — otherwise log and
+      // use what we got, so one flaky field (e.g. `localization` on an older
+      // cell) can't blank the entire storefront / fall the whole boot to mock.
+      if (json.data == null) {
+        throw new Error(`[theme-kit] GraphQL errors: ${msg}`)
+      }
+      if (typeof console !== 'undefined') {
+        // eslint-disable-next-line no-console
+        console.warn(`[theme-kit] GraphQL partial errors (using partial data): ${msg}`)
+      }
     }
     return json.data as T
   }
 
-  const boot = await graphqlRequest<BootstrapData>(COLLECTIONS_QUERY, {
-    first: collectionLimit,
-    productFirst: productLimitPerCollection,
-    productsTop: topProductLimit,
-    pageHandle: opts.pageHandle ?? null,
-  })
+  let boot: BootstrapData | undefined
+  try {
+    boot = await graphqlRequest<BootstrapData>(COLLECTIONS_QUERY, {
+      first: collectionLimit,
+      productFirst: productLimitPerCollection,
+      productsTop: topProductLimit,
+      pageHandle: opts.pageHandle ?? null,
+    })
+  } catch (err) {
+    // The full query nulls out entirely if the cell errors on an optional field
+    // (localization, nested collection products). Retry once with the reduced
+    // query so the storefront still renders real shop/menus/collections/products
+    // instead of falling all the way back to mock.
+    if (typeof console !== 'undefined') {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[theme-kit] full bootstrap failed, retrying without optional fields: ${(err as Error).message}`,
+      )
+    }
+    boot = await graphqlRequest<BootstrapData>(SAFE_COLLECTIONS_QUERY, {
+      first: collectionLimit,
+      productsTop: topProductLimit,
+      pageHandle: opts.pageHandle ?? null,
+    })
+  }
   const collections: Collection[] = (boot?.collections.edges ?? []).map((e) =>
     normalizeCollection(e.node),
   )
