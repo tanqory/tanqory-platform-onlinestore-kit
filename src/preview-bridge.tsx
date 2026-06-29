@@ -32,7 +32,18 @@ export function PreviewBridge({
   const [tree, setTree] = useState<ContentNode[]>(pages[initialPage] ?? [])
   const [selected, setSelected] = useState<number[] | null>(null)
   const data = useData()
-  const send = (msg: object) => window.parent?.postMessage(msg, '*')
+  // Post to the parent AND the top window. The editor canvas may nest this
+  // preview inside another iframe (e.g. the block-editor canvas iframe), in which
+  // case `window.parent` is that intermediate frame, not the editor window that
+  // listens for selection/content messages — so we also target `window.top`.
+  const send = (msg: object) => {
+    try {
+      window.parent?.postMessage(msg, '*')
+      if (window.top && window.top !== window.parent) window.top.postMessage(msg, '*')
+    } catch {
+      /* cross-origin top access can throw — parent post already attempted */
+    }
+  }
 
   // Keep the latest tree in a ref so the message handler can return it on
   // demand (the editor's Publish reads the LIVE-edited content straight from
@@ -207,17 +218,39 @@ export function PreviewBridge({
     if (target.closest('a, button[type="submit"]')) {
       e.preventDefault()
     }
+    // Visible selection feedback ON THE CANVAS. The node wrapper is
+    // display:contents (no box of its own), so outline its first rendered child.
+    // This is what makes a canvas click feel like an outline-tree selection.
+    const root = e.currentTarget as HTMLElement
+    const prevBox = root.querySelector<HTMLElement>('[data-tq-outlined]')
+    if (prevBox) {
+      prevBox.style.outline = ''
+      prevBox.style.outlineOffset = ''
+      prevBox.removeAttribute('data-tq-outlined')
+    }
+    const box = nodeEl.firstElementChild as HTMLElement | null
+    if (box) {
+      box.style.outline = '2px solid #2563eb'
+      box.style.outlineOffset = '-2px'
+      box.setAttribute('data-tq-outlined', '1')
+    }
     if (pathAttr) {
       const path = pathAttr.split('.').map(Number)
       setSelected(path)
       send({ type: 'tq:select', path })
     }
-    // A nested path (e.g. "3.1") means a child block was clicked — select it
+    // A nested path (e.g. "3.1") means a child BLOCK was clicked — select it
     // WITHIN its parent section so the editor opens the block's settings, not the
-    // whole section's. Walk up to the enclosing section for its id.
+    // whole section's. The parent section is the node at the path's first segment.
+    // blockId is the block's id (data-tq-section-id), which the editor keys blocks
+    // by — so it resolves to the same block the outline + settings panel use.
+    const container = e.currentTarget as HTMLElement
     const isBlock = !!pathAttr && pathAttr.includes('.')
     if (isBlock && nodeId) {
-      const sectionEl = nodeEl.parentElement?.closest<HTMLElement>('[data-tq-section-id]')
+      const sectionPath = (pathAttr as string).split('.')[0]
+      const sectionEl =
+        container.querySelector<HTMLElement>(`[data-tq-path="${sectionPath}"]`) ??
+        nodeEl.parentElement?.closest<HTMLElement>('[data-tq-section-id]')
       const sectionId = sectionEl?.dataset.tqSectionId
       if (sectionId) {
         send({ type: 'tanqory-block-selected', sectionId, blockId: nodeId })
