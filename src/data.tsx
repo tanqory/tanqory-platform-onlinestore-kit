@@ -158,6 +158,17 @@ export interface DataApi extends StorefrontExtensions {
    * menu's items with `fetchMenu(handle)`. Optional: older payloads may omit it.
    */
   listMenus?: () => Promise<Array<{ handle: string; title: string; itemsCount: number }>>
+  /** Connected tracking pixels (Settings → Customer events) to inject on the
+   *  storefront. Optional — older payloads / mock mode return []. */
+  pixels?: () => Promise<
+    Array<{
+      id: string
+      name: string
+      provider: string | null
+      providerPixelId: string | null
+      code: string | null
+    }>
+  >
   /**
    * Look up a single product by its handle. Returns null when the handle
    * isn't found. Required by FeaturedProduct / ProductDetails sections
@@ -403,6 +414,7 @@ export function createMockData(collections: Collection[]): DataApi {
         title: m.title,
         itemsCount: m.items.length,
       })),
+    pixels: async () => [],
     search: async (query, opts) => {
       const types = opts?.types ?? ['PRODUCT', 'PAGE', 'ARTICLE']
       const products = types.includes('PRODUCT') ? match(query) : []
@@ -1081,6 +1093,18 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
       menus: Array<{ handle: string; title: string; itemsCount: number }>
     }>(`query NovaMenus { menus { handle title itemsCount } }`)
     return res?.menus ?? []
+  }
+  data.pixels = async () => {
+    const res = await graphqlRequest<{
+      customPixels: Array<{
+        id: string
+        name: string
+        provider: string | null
+        providerPixelId: string | null
+        code: string | null
+      }>
+    }>(`query NovaPixels { customPixels { id name provider providerPixelId code } }`)
+    return res?.customPixels ?? []
   }
   return data
 }
