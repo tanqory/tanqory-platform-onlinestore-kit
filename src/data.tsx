@@ -169,6 +169,22 @@ export interface DataApi extends StorefrontExtensions {
       code: string | null
     }>
   >
+  /** Physical store locations (Settings → Locations) for a store-locator. */
+  locations?: () => Promise<
+    Array<{
+      id: string
+      name: string
+      code: string | null
+      address: {
+        country: string | null
+        address: string | null
+        city: string | null
+        province: string | null
+        postalCode: string | null
+        phone: string | null
+      } | null
+    }>
+  >
   /**
    * Look up a single product by its handle. Returns null when the handle
    * isn't found. Required by FeaturedProduct / ProductDetails sections
@@ -415,6 +431,7 @@ export function createMockData(collections: Collection[]): DataApi {
         itemsCount: m.items.length,
       })),
     pixels: async () => [],
+    locations: async () => [],
     search: async (query, opts) => {
       const types = opts?.types ?? ['PRODUCT', 'PAGE', 'ARTICLE']
       const products = types.includes('PRODUCT') ? match(query) : []
@@ -1105,6 +1122,26 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
       }>
     }>(`query NovaPixels { customPixels { id name provider providerPixelId code } }`)
     return res?.customPixels ?? []
+  }
+  data.locations = async () => {
+    const res = await graphqlRequest<{
+      locations: Array<{
+        id: string
+        name: string
+        code: string | null
+        address: {
+          country: string | null
+          address: string | null
+          city: string | null
+          province: string | null
+          postalCode: string | null
+          phone: string | null
+        } | null
+      }>
+    }>(
+      `query NovaLocations { locations { id name code address { country address city province postalCode phone } } }`,
+    )
+    return res?.locations ?? []
   }
   return data
 }
