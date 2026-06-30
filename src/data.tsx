@@ -358,6 +358,7 @@ export function createMockData(collections: Collection[]): DataApi {
       shipping: { handle: 'shipping-policy', title: 'Shipping policy', url: '/policies/shipping-policy', body: '<p>Mock shipping policy.</p>' },
       subscription: null,
     },
+    cookieBanner: { enabled: true, dataSharingTitle: 'Do not sell or share my personal information', dataSharingVisible: true },
   }
 
   const EMPTY_PI = { hasNextPage: false, hasPreviousPage: false, startCursor: null, endCursor: null }

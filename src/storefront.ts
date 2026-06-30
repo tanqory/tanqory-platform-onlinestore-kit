@@ -207,6 +207,12 @@ export interface Shop {
     shipping?: ShopPolicy | null
     subscription?: ShopPolicy | null
   }
+  /** Cookie-consent banner config (Settings → Customer privacy). */
+  cookieBanner?: {
+    enabled: boolean
+    dataSharingTitle?: string | null
+    dataSharingVisible?: boolean
+  } | null
 }
 
 // ───────────────────────── Customer ──────────────────────────────
@@ -546,6 +552,13 @@ function normalizeShop(n: any): Shop | null {
       shipping: normalizeShopPolicy(n.shippingPolicy),
       subscription: normalizeShopPolicy(n.subscriptionPolicy),
     },
+    cookieBanner: n.cookieBanner
+      ? {
+          enabled: Boolean(n.cookieBanner.enabled),
+          dataSharingTitle: n.cookieBanner.dataSharingTitle ?? null,
+          dataSharingVisible: n.cookieBanner.dataSharingVisible !== false,
+        }
+      : null,
   }
 }
 
@@ -568,6 +581,7 @@ export const BOOTSTRAP_SHOP_MENU = /* GraphQL */ `
     termsOfService { handle title url }
     shippingPolicy { handle title url }
     subscriptionPolicy { handle title url }
+    cookieBanner { enabled dataSharingTitle dataSharingVisible }
   }
   mainMenu: menu(handle: "main-menu") { ...MenuFields }
   footerMenu: menu(handle: "footer") { ...MenuFields }
