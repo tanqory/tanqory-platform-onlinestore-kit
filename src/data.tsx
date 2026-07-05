@@ -234,6 +234,14 @@ export interface DataApi extends StorefrontExtensions {
     handle: string,
     identifiers: Array<{ namespace: string; key: string }>,
   ) => Promise<Record<string, string | null>>
+  /**
+   * The raw serializable bootstrap payload this live DataApi was built from
+   * (null for mock data). The SSG step embeds it into the page as
+   * `window.__TQ_STATE__` so the client can rebuild the identical DataApi
+   * synchronously at hydration via createLiveDataFromSnapshot — SSR markup and
+   * the client's first render match by construction.
+   */
+  getSnapshot?: () => unknown
 }
 
 /** Country/market shape mirrored from storefront GraphQL `Localization`. */
@@ -892,7 +900,17 @@ function normalizeProductDetail(p: GqlProductDetailNode): Product {
   }
 }
 
-export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
+type GraphqlRequester = <T = unknown>(
+  query: string,
+  variables?: Record<string, unknown>,
+) => Promise<T>
+
+/**
+ * One request path for the bootstrap AND every post-boot interaction (the
+ * cart's mutations, the PDP's lazy product fetch) — same endpoint, same
+ * publishable-key + country headers, same error handling.
+ */
+function makeGraphqlRequest(opts: LiveDataOptions): GraphqlRequester {
   const maybeFetch = opts.fetcher ?? (globalThis.fetch as typeof fetch | undefined)
   if (!maybeFetch) {
     throw new Error('[theme-kit] createLiveData: fetch is not available in this environment')
@@ -902,19 +920,7 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
   const f: typeof fetch = maybeFetch
   const endpoint = opts.endpoint.replace(/\/$/, '')
   const url = `${endpoint}/api/v1/stores/${encodeURIComponent(opts.storeId)}/graphql`
-  // Defaults stay under store-api's GraphQL cost budget (1000). Cost formula
-  // for the bootstrap query: 3*N + 4*N*M + 4*T  (N = collectionLimit,
-  // M = productLimitPerCollection, T = topProductLimit). 10 + 10 + 24 = 526
-  // — plenty of headroom for a homepage prefetch. Bump in opts.prefetch only
-  // if you're sure the store's cost-budget limit is higher than 1000.
-  const collectionLimit = opts.prefetch?.collectionLimit ?? 10
-  const productLimitPerCollection = opts.prefetch?.productLimitPerCollection ?? 10
-  const topProductLimit = opts.prefetch?.topProductLimit ?? 24
-
-  // One request path for the bootstrap AND every post-boot interaction (the
-  // cart's mutations, the PDP's lazy product fetch) — same endpoint, same
-  // publishable-key + country headers, same error handling.
-  async function graphqlRequest<T = unknown>(
+  return async function graphqlRequest<T = unknown>(
     query: string,
     variables?: Record<string, unknown>,
   ): Promise<T> {
@@ -952,6 +958,18 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
     }
     return json.data as T
   }
+}
+
+export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
+  const graphqlRequest = makeGraphqlRequest(opts)
+  // Defaults stay under store-api's GraphQL cost budget (1000). Cost formula
+  // for the bootstrap query: 3*N + 4*N*M + 4*T  (N = collectionLimit,
+  // M = productLimitPerCollection, T = topProductLimit). 10 + 10 + 24 = 526
+  // — plenty of headroom for a homepage prefetch. Bump in opts.prefetch only
+  // if you're sure the store's cost-budget limit is higher than 1000.
+  const collectionLimit = opts.prefetch?.collectionLimit ?? 10
+  const productLimitPerCollection = opts.prefetch?.productLimitPerCollection ?? 10
+  const topProductLimit = opts.prefetch?.topProductLimit ?? 24
 
   let boot: BootstrapData | undefined
   try {
@@ -978,6 +996,31 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
       pageHandle: opts.pageHandle ?? null,
     })
   }
+  return buildLiveData(boot, graphqlRequest, opts)
+}
+
+/**
+ * Build a live DataApi SYNCHRONOUSLY from a previously-fetched bootstrap
+ * payload (`data.getSnapshot()`, serialized into the SSG HTML as
+ * `window.__TQ_STATE__` by the prerender step). This is what makes hydration
+ * deterministic: the client's first render uses the EXACT data the server
+ * rendered with — no network round-trip, no drift, no mock fallback — and
+ * mount()'s `revalidate` swaps in fresh data after hydration (SWR).
+ */
+export function createLiveDataFromSnapshot(snapshot: unknown, opts: LiveDataOptions): DataApi {
+  const graphqlRequest = makeGraphqlRequest(opts)
+  return buildLiveData((snapshot ?? undefined) as BootstrapData | undefined, graphqlRequest, opts)
+}
+
+/** Assemble the DataApi from a bootstrap payload + a live requester. Shared by
+ *  createLiveData (fetches the bootstrap) and createLiveDataFromSnapshot
+ *  (reuses the serialized one) so both paths render identically. */
+function buildLiveData(
+  boot: BootstrapData | undefined,
+  graphqlRequest: GraphqlRequester,
+  opts: LiveDataOptions,
+): DataApi {
+  const productLimitPerCollection = opts.prefetch?.productLimitPerCollection ?? 10
   const collections: Collection[] = (boot?.collections.edges ?? []).map((e) =>
     normalizeCollection(e.node),
   )
@@ -1143,15 +1186,48 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
     )
     return res?.locations ?? []
   }
+  // The raw serializable bootstrap this DataApi was built from. entry-server
+  // embeds it into the SSG HTML (window.__TQ_STATE__) so the client can
+  // rebuild the SAME DataApi synchronously at hydration — see
+  // createLiveDataFromSnapshot. null when there was no live bootstrap.
+  data.getSnapshot = () => boot ?? null
   return data
 }
 
+// ─── Deterministic money formatting ─────────────────────────────────────────
+// Intl.NumberFormat's currency output depends on the environment's ICU data
+// (the build pod's Node vs each visitor's browser can format the SAME Money
+// differently, e.g. "THB 120.00" vs "฿120.00") — which breaks SSR hydration
+// (React #425 text mismatch). Format manually instead: identical output
+// everywhere, by construction.
+const CURRENCY_FORMAT: Record<string, { symbol: string; decimals: number }> = {
+  THB: { symbol: '฿', decimals: 2 },
+  USD: { symbol: '$', decimals: 2 },
+  EUR: { symbol: '€', decimals: 2 },
+  GBP: { symbol: '£', decimals: 2 },
+  JPY: { symbol: '¥', decimals: 0 },
+  KRW: { symbol: '₩', decimals: 0 },
+  VND: { symbol: '₫', decimals: 0 },
+  IDR: { symbol: 'Rp', decimals: 0 },
+  SGD: { symbol: 'S$', decimals: 2 },
+  HKD: { symbol: 'HK$', decimals: 2 },
+  TWD: { symbol: 'NT$', decimals: 2 },
+  AUD: { symbol: 'A$', decimals: 2 },
+  NZD: { symbol: 'NZ$', decimals: 2 },
+  CAD: { symbol: 'CA$', decimals: 2 },
+  CNY: { symbol: 'CN¥', decimals: 2 },
+  INR: { symbol: '₹', decimals: 2 },
+  MYR: { symbol: 'RM', decimals: 2 },
+  PHP: { symbol: '₱', decimals: 2 },
+}
+
 export function formatMoney(money: Money): string {
-  try {
-    return new Intl.NumberFormat('en', { style: 'currency', currency: money.currencyCode }).format(
-      Number(money.amount),
-    )
-  } catch {
-    return `${money.amount} ${money.currencyCode}`
-  }
+  const n = Number(money.amount)
+  if (!Number.isFinite(n)) return `${money.amount} ${money.currencyCode}`
+  const info = CURRENCY_FORMAT[money.currencyCode]
+  const decimals = info?.decimals ?? 2
+  const [int, frac] = Math.abs(n).toFixed(decimals).split('.')
+  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  const num = `${n < 0 ? '-' : ''}${grouped}${frac ? `.${frac}` : ''}`
+  return info ? `${info.symbol}${num}` : `${num} ${money.currencyCode}`
 }

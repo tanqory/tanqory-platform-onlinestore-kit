@@ -7,7 +7,14 @@ export { renderStorefrontHTML, renderSectionPreviewHTML } from './ssg'
 export { SectionTree } from './SectionTree'
 export { Editor } from './editor'
 export { registerSections, getSection, allSections } from './registry'
-export { DataProvider, useData, createMockData, createLiveData, formatMoney } from './data'
+export {
+  DataProvider,
+  useData,
+  createMockData,
+  createLiveData,
+  createLiveDataFromSnapshot,
+  formatMoney,
+} from './data'
 export { CartProvider, useCart } from './cart'
 export {
   DynamicSourceProvider,
