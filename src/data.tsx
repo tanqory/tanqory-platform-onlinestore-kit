@@ -765,7 +765,7 @@ const PRODUCT_QUERY = /* GraphQL */ `
       compareAtPriceRange { maxVariantPrice { amount currencyCode } }
       options(first: 10) { name values }
       seo { title description }
-      variants(first: 100) {
+      variants(first: 50) {
         nodes {
           id
           title
@@ -778,7 +778,7 @@ const PRODUCT_QUERY = /* GraphQL */ `
           unitPrice { amount currencyCode }
           unitPriceMeasurement { measuredType quantityValue quantityUnit referenceValue referenceUnit }
           quantityRule { minimum maximum increment }
-          storeAvailability(first: 10) {
+          storeAvailability(first: 5) {
             nodes { available quantityAvailable pickUpTime location { id name } }
           }
         }
@@ -1096,11 +1096,22 @@ function buildLiveData(
     handle: string,
     fpOpts?: { metafields?: Array<{ namespace: string; key: string }> },
   ): Promise<Product | null> => {
-    const res = await graphqlRequest<{ product: GqlProductDetailNode | null }>(PRODUCT_QUERY, {
-      handle,
-      identifiers: fpOpts?.metafields ?? [],
-    })
-    return res?.product ? normalizeProductDetail(res.product) : null
+    // Never reject: a failed detail fetch (cost budget, cold cell, network)
+    // must degrade to the prefetched card data, not crash the product page
+    // with an unhandled rejection mid-hydration.
+    try {
+      const res = await graphqlRequest<{ product: GqlProductDetailNode | null }>(PRODUCT_QUERY, {
+        handle,
+        identifiers: fpOpts?.metafields ?? [],
+      })
+      return res?.product ? normalizeProductDetail(res.product) : null
+    } catch (err) {
+      if (typeof console !== 'undefined') {
+        // eslint-disable-next-line no-console
+        console.warn(`[theme-kit] fetchProduct(${handle}) failed: ${(err as Error).message}`)
+      }
+      return null
+    }
   }
 
   // Dynamic-source metafields for the shop + a collection. Both query the
