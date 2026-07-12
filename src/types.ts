@@ -10,18 +10,41 @@ export interface AttrSpec {
     | 'url'
     | 'boolean'
     | 'select'
+    | 'radio'
     | 'richtext'
+    | 'html'
+    // A left/center/right choice (Shopify `text_alignment`).
+    | 'text_alignment'
+    // A range slider (min/max/step).
+    | 'range'
+    // A hosted or external video URL.
+    | 'video'
     // Catalogue pickers — the editor renders these as dropdowns fed by the
     // storefront API (value = the entity's handle).
     | 'collection'
     | 'product'
+    | 'page'
+    | 'blog'
+    | 'article'
+    // A store menu / link list (value = menu handle).
+    | 'menu'
     // Media-library picker — the editor opens the store's central media
     // library (browse or upload). Value is a plain URL string, so section
     // components consume it exactly like 'url'.
     | 'image'
   default?: unknown
   label?: string
-  /** For type 'select' — the editor renders these as dropdown options. */
+  /** Slider bounds — for type 'range'. */
+  min?: number
+  max?: number
+  step?: number
+  unit?: string
+  /** Placeholder / helper text shown in the editor control. */
+  placeholder?: string
+  info?: string
+  /** Conditional visibility (Shopify-style), e.g. `"{{ section.settings.x == 'y' }}"`. */
+  visible_if?: string
+  /** For type 'select'/'radio' — the editor renders these as options. */
   options?: { value: string; label: string }[]
 }
 

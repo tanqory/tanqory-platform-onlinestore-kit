@@ -120,11 +120,15 @@ export interface Product {
   seo?: Seo | null
 }
 export interface Collection {
+  /** Backend collection id (Shopify `collection.id`). */
+  id?: string
   handle: string
   title: string
   /** Optional hero image; falls back to first product's featuredImage. */
   image?: { url?: string; altText?: string } | null
   products: Product[]
+  /** Total number of products in the collection (Shopify `products_count`). */
+  productsCount?: number
   /** Custom metafields ("namespace.key" → value) for dynamic sources. */
   metafields?: Record<string, string | null>
 }
@@ -589,6 +593,7 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
           handle
           title
           image { url altText }
+          productsCount { count }
           products(first: $productFirst) {
             edges {
               node { ...ProductCardBoot }
@@ -647,6 +652,7 @@ const SAFE_COLLECTIONS_QUERY = /* GraphQL */ `
           handle
           title
           image { url altText }
+          productsCount { count }
         }
       }
     }
@@ -678,6 +684,7 @@ interface GqlCollectionNode {
   handle: string
   title: string
   image?: GqlImg
+  productsCount?: { count: number } | null
   products: { edges: Array<{ node: GqlProductNode }> }
 }
 interface GqlPageNode {
@@ -736,9 +743,13 @@ function normalizeProduct(p: GqlProductNode): Product {
 
 function normalizeCollection(c: GqlCollectionNode): Collection {
   return {
+    ...(c.id ? { id: c.id } : {}),
     handle: c.handle,
     title: c.title,
     image: normalizeImage(c.image),
+    ...(typeof c.productsCount?.count === 'number'
+      ? { productsCount: c.productsCount.count }
+      : {}),
     // Nested products are optional — the reduced bootstrap (used when a cell
     // errors on the nested products field) omits them.
     products: (c.products?.edges ?? []).map((e) => normalizeProduct(e.node)),
@@ -1232,13 +1243,69 @@ const CURRENCY_FORMAT: Record<string, { symbol: string; decimals: number }> = {
   PHP: { symbol: '₱', decimals: 2 },
 }
 
-export function formatMoney(money: Money): string {
+/** The grouped numeric part of a Money, without symbol or code.
+ *  `stripZeros` drops a `.00`-style fraction (Shopify `money_without_trailing_zeros`). */
+function moneyDigits(money: Money, stripZeros = false): string | null {
   const n = Number(money.amount)
-  if (!Number.isFinite(n)) return `${money.amount} ${money.currencyCode}`
+  if (!Number.isFinite(n)) return null
   const info = CURRENCY_FORMAT[money.currencyCode]
   const decimals = info?.decimals ?? 2
-  const [int, frac] = Math.abs(n).toFixed(decimals).split('.')
+  let [int, frac] = Math.abs(n).toFixed(decimals).split('.')
+  if (stripZeros && frac && /^0+$/.test(frac)) frac = ''
   const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-  const num = `${n < 0 ? '-' : ''}${grouped}${frac ? `.${frac}` : ''}`
+  return `${n < 0 ? '-' : ''}${grouped}${frac ? `.${frac}` : ''}`
+}
+
+/** Shopify `money` — symbol + amount (e.g. "฿120.00"). */
+export function formatMoney(money: Money): string {
+  const num = moneyDigits(money)
+  if (num === null) return `${money.amount} ${money.currencyCode}`
+  const info = CURRENCY_FORMAT[money.currencyCode]
   return info ? `${info.symbol}${num}` : `${num} ${money.currencyCode}`
+}
+
+/** Shopify `money_with_currency` — symbol + amount + ISO code (e.g. "฿120.00 THB"). */
+export function formatMoneyWithCurrency(money: Money): string {
+  const num = moneyDigits(money)
+  if (num === null) return `${money.amount} ${money.currencyCode}`
+  const info = CURRENCY_FORMAT[money.currencyCode]
+  return info
+    ? `${info.symbol}${num} ${money.currencyCode}`
+    : `${num} ${money.currencyCode}`
+}
+
+/** Shopify `money_without_currency` — bare grouped amount (e.g. "120.00"). */
+export function formatMoneyWithoutCurrency(money: Money): string {
+  return moneyDigits(money) ?? `${money.amount}`
+}
+
+/** Shopify `money_without_trailing_zeros` — symbol + amount, dropping a `.00`
+ *  fraction (e.g. "฿120", but "฿120.50" stays). */
+export function formatMoneyWithoutTrailingZeros(money: Money): string {
+  const num = moneyDigits(money, true)
+  if (num === null) return `${money.amount} ${money.currencyCode}`
+  const info = CURRENCY_FORMAT[money.currencyCode]
+  return info ? `${info.symbol}${num}` : `${num} ${money.currencyCode}`
+}
+
+/** Shopify `image_url` — append CDN transform params (width/height/crop) to an
+ *  image URL. No-op when the src is empty or no transform is requested. React
+ *  themes render the `<img>` themselves, so there is no separate `image_tag`. */
+export function imageUrl(
+  src: string | null | undefined,
+  opts: { width?: number; height?: number; crop?: string } = {},
+): string {
+  if (!src) return ''
+  const { width, height, crop } = opts
+  if (!width && !height && !crop) return src
+  try {
+    const url = new URL(src, 'https://cdn.tanqory.com')
+    if (width) url.searchParams.set('width', String(width))
+    if (height) url.searchParams.set('height', String(height))
+    if (crop) url.searchParams.set('crop', crop)
+    // Preserve relative URLs (return path+query) vs absolute.
+    return /^https?:\/\//i.test(src) ? url.toString() : `${url.pathname}${url.search}`
+  } catch {
+    return src
+  }
 }
