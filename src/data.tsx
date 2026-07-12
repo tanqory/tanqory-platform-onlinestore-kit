@@ -1384,6 +1384,34 @@ export function formatMoneyWithoutTrailingZeros(money: Money): string {
   return info ? `${info.symbol}${num}` : `${num} ${money.currencyCode}`
 }
 
+/** Shopify `date` / `time_tag` — format an ISO date deterministically (identical
+ *  output on server + client to keep SSR hydration stable). Defaults to a medium
+ *  date; pass Intl options to customize. */
+export function formatDate(
+  input: string | number | Date | null | undefined,
+  opts: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' },
+  locale = 'en-US',
+): string {
+  if (!input) return ''
+  const d = input instanceof Date ? input : new Date(input)
+  if (Number.isNaN(d.getTime())) return ''
+  try {
+    return new Intl.DateTimeFormat(locale, { ...opts, timeZone: 'UTC' }).format(d)
+  } catch {
+    return d.toISOString().slice(0, 10)
+  }
+}
+
+/** Shopify `weight_with_unit` — format a variant weight (e.g. "1.5 kg"). */
+export function formatWeight(
+  weight: { value: number; unit: string } | null | undefined,
+): string {
+  if (!weight || !Number.isFinite(weight.value)) return ''
+  const unit = { GRAMS: 'g', KILOGRAMS: 'kg', OUNCES: 'oz', POUNDS: 'lb' }[weight.unit] ?? weight.unit.toLowerCase()
+  const n = Number.isInteger(weight.value) ? weight.value : Number(weight.value.toFixed(2))
+  return `${n} ${unit}`
+}
+
 /** Shopify `image_url` — append CDN transform params (width/height/crop) to an
  *  image URL. No-op when the src is empty or no transform is requested. React
  *  themes render the `<img>` themselves, so there is no separate `image_tag`. */

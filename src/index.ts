@@ -18,6 +18,8 @@ export {
   formatMoneyWithoutCurrency,
   formatMoneyWithoutTrailingZeros,
   imageUrl,
+  formatDate,
+  formatWeight,
 } from './data'
 export { CartProvider, useCart } from './cart'
 export {
