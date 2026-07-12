@@ -79,6 +79,18 @@ export interface ProductVariant {
   image?: ImageRef | null
   /** Stock-keeping unit. Only after `fetchProduct()`. */
   sku?: string | null
+  /** Barcode (ISBN, UPC, GTIN…). Only after `fetchProduct()`. */
+  barcode?: string | null
+  /** On-hand stock for this variant (Shopify `inventory_quantity`). */
+  inventoryQuantity?: number | null
+  /** `DENY` (stop selling at 0) or `CONTINUE` (oversell) — Shopify `inventory_policy`. */
+  inventoryPolicy?: 'DENY' | 'CONTINUE' | null
+  /** Whether the variant needs shipping (physical vs digital/service). */
+  requiresShipping?: boolean | null
+  /** Whether tax applies to the variant. */
+  taxable?: boolean | null
+  /** Physical weight (for shipping display). */
+  weight?: { value: number; unit: string } | null
   /** Cart quantity bounds (min/max/increment). */
   quantityRule?: QuantityRule
   /** Per-unit price ("$2.50 / 100ml") for measured products. */
@@ -108,17 +120,40 @@ export interface Product {
   description?: string
   /** Image gallery — only after `fetchProduct()` (PDP). */
   images?: ImageRef[]
+  /** Full media gallery incl. video / 3D (Shopify `product.media`) — after `fetchProduct()`. */
+  media?: ProductMedia[]
   /** Option definitions (Size, Color…) — only after `fetchProduct()`. */
   options?: ProductOption[]
   /** Full variant list — only after `fetchProduct()` (PDP). */
   variants?: ProductVariant[]
   /** Subscription / selling-plan groups — only after `fetchProduct()`. */
   sellingPlanGroups?: SellingPlanGroup[]
+  /** True for gift-card products (Shopify `product.gift_card`) — after `fetchProduct()`. */
+  isGiftCard?: boolean
+  /** Total on-hand stock across variants (Shopify `product.totalInventory`). */
+  totalInventory?: number | null
   /** Requested custom metafields ("namespace.key" → value) — pass identifiers to fetchProduct(). */
   metafields?: Record<string, string | null>
   /** SEO override — only after `fetchProduct()`. */
   seo?: Seo | null
 }
+/** A product media node — image, video, 3D model, or external (YouTube/Vimeo) video. */
+export interface ProductMedia {
+  id: string
+  type: 'image' | 'video' | 'model_3d' | 'external_video'
+  alt?: string | null
+  /** Present for `image`. */
+  image?: ImageRef | null
+  /** Poster frame for video / 3D. */
+  previewImage?: ImageRef | null
+  /** Playable/loadable sources for `video` / `model_3d`. */
+  sources?: { url: string; mimeType?: string | null; format?: string | null }[]
+  /** For `external_video` — 'YOUTUBE' | 'VIMEO'. */
+  host?: string | null
+  /** For `external_video` — the embed URL. */
+  embedUrl?: string | null
+}
+
 export interface Collection {
   /** Backend collection id (Shopify `collection.id`). */
   id?: string
@@ -770,8 +805,19 @@ const PRODUCT_QUERY = /* GraphQL */ `
       productType
       tags
       availableForSale
+      isGiftCard
+      totalInventory
       featuredImage { url altText }
       images(first: 20) { nodes { url altText } }
+      media(first: 20) {
+        nodes {
+          __typename
+          ... on MediaImage { id alt image { url altText } }
+          ... on Video { id alt previewImage { url altText } sources { url mimeType format } }
+          ... on Model3d { id alt previewImage { url altText } sources { url mimeType format } }
+          ... on ExternalVideo { id alt host embedUrl previewImage { url altText } }
+        }
+      }
       priceRange { minVariantPrice { amount currencyCode } }
       compareAtPriceRange { maxVariantPrice { amount currencyCode } }
       options(first: 10) { name values }
@@ -782,6 +828,12 @@ const PRODUCT_QUERY = /* GraphQL */ `
           title
           availableForSale
           sku
+          barcode
+          inventoryQuantity
+          inventoryPolicy
+          requiresShipping
+          taxable
+          weight { value unit }
           price { amount currencyCode }
           compareAtPrice { amount currencyCode }
           image { url altText }
@@ -815,6 +867,12 @@ interface GqlVariantNode {
   title: string
   availableForSale: boolean
   sku?: string | null
+  barcode?: string | null
+  inventoryQuantity?: number | null
+  inventoryPolicy?: 'DENY' | 'CONTINUE' | null
+  requiresShipping?: boolean | null
+  taxable?: boolean | null
+  weight?: { value: number; unit: string } | null
   price?: GqlMoney
   compareAtPrice?: GqlMoney | null
   image?: GqlImg
@@ -843,9 +901,22 @@ interface GqlSellingPlanGroupNode {
     options?: Array<{ name: string; value: string }>
   }> }
 }
+interface GqlMediaNode {
+  __typename: 'MediaImage' | 'Video' | 'Model3d' | 'ExternalVideo'
+  id: string
+  alt?: string | null
+  image?: GqlImg
+  previewImage?: GqlImg
+  sources?: Array<{ url: string; mimeType?: string | null; format?: string | null }>
+  host?: string | null
+  embedUrl?: string | null
+}
 interface GqlProductDetailNode extends GqlProductNode {
   description?: string | null
+  isGiftCard?: boolean | null
+  totalInventory?: number | null
   images?: { nodes: GqlImg[] }
+  media?: { nodes: GqlMediaNode[] }
   options?: Array<{ name: string; values: string[] }>
   seo?: { title?: string | null; description?: string | null } | null
   variants?: { nodes: GqlVariantNode[] }
@@ -864,6 +935,12 @@ function normalizeProductDetail(p: GqlProductDetailNode): Product {
       : {}),
     availableForSale: v.availableForSale,
     ...(v.sku ? { sku: v.sku } : {}),
+    ...(v.barcode ? { barcode: v.barcode } : {}),
+    ...(typeof v.inventoryQuantity === 'number' ? { inventoryQuantity: v.inventoryQuantity } : {}),
+    ...(v.inventoryPolicy ? { inventoryPolicy: v.inventoryPolicy } : {}),
+    ...(typeof v.requiresShipping === 'boolean' ? { requiresShipping: v.requiresShipping } : {}),
+    ...(typeof v.taxable === 'boolean' ? { taxable: v.taxable } : {}),
+    ...(v.weight ? { weight: v.weight } : {}),
     ...(v.selectedOptions?.length ? { selectedOptions: v.selectedOptions } : {}),
     image: normalizeImage(v.image),
     ...(v.unitPrice ? { unitPrice: v.unitPrice } : {}),
@@ -883,6 +960,22 @@ function normalizeProductDetail(p: GqlProductDetailNode): Product {
   const images: ImageRef[] = (p.images?.nodes ?? [])
     .map(normalizeImage)
     .filter((i): i is ImageRef => i !== null)
+  const TYPE_MAP: Record<GqlMediaNode['__typename'], ProductMedia['type']> = {
+    MediaImage: 'image',
+    Video: 'video',
+    Model3d: 'model_3d',
+    ExternalVideo: 'external_video',
+  }
+  const media: ProductMedia[] = (p.media?.nodes ?? []).map((m) => ({
+    id: m.id,
+    type: TYPE_MAP[m.__typename] ?? 'image',
+    alt: m.alt ?? null,
+    ...(m.image ? { image: normalizeImage(m.image) } : {}),
+    ...(m.previewImage ? { previewImage: normalizeImage(m.previewImage) } : {}),
+    ...(m.sources?.length ? { sources: m.sources } : {}),
+    ...(m.host ? { host: m.host } : {}),
+    ...(m.embedUrl ? { embedUrl: m.embedUrl } : {}),
+  }))
   const sellingPlanGroups: SellingPlanGroup[] = (p.sellingPlanGroups?.nodes ?? []).map((g) => ({
     name: g.name,
     appName: g.appName ?? null,
@@ -902,7 +995,10 @@ function normalizeProductDetail(p: GqlProductDetailNode): Product {
   return {
     ...base,
     ...(p.description ? { description: p.description } : {}),
+    ...(typeof p.isGiftCard === 'boolean' ? { isGiftCard: p.isGiftCard } : {}),
+    ...(typeof p.totalInventory === 'number' ? { totalInventory: p.totalInventory } : {}),
     ...(images.length ? { images } : {}),
+    ...(media.length ? { media } : {}),
     ...(p.options?.length ? { options: p.options } : {}),
     ...(p.seo ? { seo: { title: p.seo.title ?? null, description: p.seo.description ?? null } } : {}),
     ...(variants.length ? { variants } : {}),
