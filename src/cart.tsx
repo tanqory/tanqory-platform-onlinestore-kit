@@ -72,6 +72,14 @@ export interface CartState {
   subtotal: Money
   /** Final amount after discounts + gift cards (cost.totalAmount). */
   total: Money
+  /** Estimated tax (cost.totalTaxAmount) — null until known (usually at checkout). */
+  tax?: Money | null
+  /** Estimated duties (cost.totalDutyAmount) — null unless cross-border. */
+  duty?: Money | null
+  /** Cart-level order note (Shopify `cart.note`). */
+  note?: string | null
+  /** Cart-level custom attributes (Shopify `cart.attributes`). */
+  attributes?: { key: string; value: string | null }[]
   totalQuantity: number
   checkoutUrl: string | null
   /** Discount codes applied to the cart. */
@@ -111,6 +119,10 @@ export interface CartApi extends CartState {
   applyGiftCardCodes: (codes: string[]) => Promise<void>
   /** Remove applied gift cards by id. LIVE only. */
   removeGiftCards: (ids: string[]) => Promise<void>
+  /** Set the cart-level order note (Shopify `cart.note`). LIVE only. */
+  updateNote: (note: string) => Promise<void>
+  /** Replace the cart-level custom attributes (Shopify `cart.attributes`). LIVE only. */
+  updateAttributes: (attributes: { key: string; value: string }[]) => Promise<void>
 }
 
 // ─── Money helpers (amounts are decimal strings) ──────────────────
@@ -137,9 +149,13 @@ const CART_FRAGMENT = /* GraphQL */ `
     id
     checkoutUrl
     totalQuantity
+    note
+    attributes { key value }
     cost {
       subtotalAmount { amount currencyCode }
       totalAmount { amount currencyCode }
+      totalTaxAmount { amount currencyCode }
+      totalDutyAmount { amount currencyCode }
     }
     discountCodes { code applicable }
     discountAllocations {
@@ -226,12 +242,35 @@ const CART_GIFTCARD_REMOVE = /* GraphQL */ `
   }
   ${CART_FRAGMENT}
 `
+const CART_NOTE_UPDATE = /* GraphQL */ `
+  mutation CartNoteUpdate($cartId: ID!, $note: String) {
+    cartNoteUpdate(cartId: $cartId, note: $note) {
+      cart { ...CartFields } userErrors { message }
+    }
+  }
+  ${CART_FRAGMENT}
+`
+const CART_ATTRIBUTES_UPDATE = /* GraphQL */ `
+  mutation CartAttributesUpdate($cartId: ID!, $attributes: [AttributeInput!]!) {
+    cartAttributesUpdate(cartId: $cartId, attributes: $attributes) {
+      cart { ...CartFields } userErrors { message }
+    }
+  }
+  ${CART_FRAGMENT}
+`
 
 interface GqlCart {
   id: string
   checkoutUrl: string
   totalQuantity: number
-  cost: { subtotalAmount: Money; totalAmount: Money }
+  note?: string | null
+  attributes?: Array<{ key: string; value: string | null }>
+  cost: {
+    subtotalAmount: Money
+    totalAmount: Money
+    totalTaxAmount?: Money | null
+    totalDutyAmount?: Money | null
+  }
   discountCodes?: Array<{ code: string; applicable: boolean }>
   discountAllocations?: Array<{ discountedAmount: Money; code?: string; title?: string }>
   appliedGiftCards?: Array<{
@@ -304,6 +343,10 @@ function normalizeCart(c: GqlCart): Omit<CartState, 'loading' | 'ready' | 'error
     lines,
     subtotal,
     total: c.cost?.totalAmount ?? subtotal,
+    tax: c.cost?.totalTaxAmount ?? null,
+    duty: c.cost?.totalDutyAmount ?? null,
+    note: c.note ?? null,
+    attributes: (c.attributes ?? []).map((a) => ({ key: a.key, value: a.value ?? null })),
     totalQuantity: c.totalQuantity ?? countQty(lines),
     checkoutUrl: c.checkoutUrl ?? null,
     discountCodes: (c.discountCodes ?? []).map((d) => ({ code: d.code, applicable: d.applicable })),
@@ -565,6 +608,14 @@ export function CartProvider({ children }: { children: ReactNode }): JSX.Element
     (ids) => runCartMutation(CART_GIFTCARD_REMOVE, 'cartGiftCardCodesRemove', { appliedGiftCardIds: ids }),
     [runCartMutation],
   )
+  const updateNote = useCallback<CartApi['updateNote']>(
+    (note) => runCartMutation(CART_NOTE_UPDATE, 'cartNoteUpdate', { note }),
+    [runCartMutation],
+  )
+  const updateAttributes = useCallback<CartApi['updateAttributes']>(
+    (attributes) => runCartMutation(CART_ATTRIBUTES_UPDATE, 'cartAttributesUpdate', { attributes }),
+    [runCartMutation],
+  )
 
   const value: CartApi = {
     ...state,
@@ -575,6 +626,8 @@ export function CartProvider({ children }: { children: ReactNode }): JSX.Element
     applyDiscountCodes,
     applyGiftCardCodes,
     removeGiftCards,
+    updateNote,
+    updateAttributes,
   }
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>
 }

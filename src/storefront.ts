@@ -213,6 +213,18 @@ export interface Shop {
     dataSharingTitle?: string | null
     dataSharingVisible?: boolean
   } | null
+  /** Primary storefront domain (for canonical URLs / SEO). */
+  primaryDomain?: {
+    host: string
+    url: string
+    sslEnabled: boolean
+  } | null
+  /** Accepted payment methods (for footer/checkout payment icons). */
+  paymentSettings?: {
+    acceptedCardBrands: string[]
+    supportedDigitalWallets: string[]
+    currencyCode?: string | null
+  } | null
 }
 
 // ───────────────────────── Customer ──────────────────────────────
@@ -559,6 +571,20 @@ function normalizeShop(n: any): Shop | null {
           dataSharingVisible: n.cookieBanner.dataSharingVisible !== false,
         }
       : null,
+    primaryDomain: n.primaryDomain
+      ? {
+          host: n.primaryDomain.host,
+          url: n.primaryDomain.url,
+          sslEnabled: Boolean(n.primaryDomain.sslEnabled),
+        }
+      : null,
+    paymentSettings: n.paymentSettings
+      ? {
+          acceptedCardBrands: n.paymentSettings.acceptedCardBrands ?? [],
+          supportedDigitalWallets: n.paymentSettings.supportedDigitalWallets ?? [],
+          currencyCode: n.paymentSettings.currencyCode ?? null,
+        }
+      : null,
   }
 }
 
@@ -582,6 +608,8 @@ export const BOOTSTRAP_SHOP_MENU = /* GraphQL */ `
     shippingPolicy { handle title url }
     subscriptionPolicy { handle title url }
     cookieBanner { enabled dataSharingTitle dataSharingVisible }
+    primaryDomain { host url sslEnabled }
+    paymentSettings { acceptedCardBrands supportedDigitalWallets currencyCode }
   }
   mainMenu: menu(handle: "main-menu") { ...MenuFields }
   footerMenu: menu(handle: "footer") { ...MenuFields }
