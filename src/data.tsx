@@ -176,6 +176,9 @@ export interface Page {
   author?: string | null
   publishedAt?: string
   updatedAt?: string
+  /** Shopify-style template suffix (e.g. "contact"); the theme renders
+   *  templates/page.<suffix>.json when set, else the default page template. */
+  templateSuffix?: string | null
 }
 
 /**
@@ -620,6 +623,7 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
       author
       publishedAt
       updatedAt
+      templateSuffix
     }
     collections(first: $first) {
       edges {
@@ -679,6 +683,7 @@ const SAFE_COLLECTIONS_QUERY = /* GraphQL */ `
       author
       publishedAt
       updatedAt
+      templateSuffix
     }
     collections(first: $first) {
       edges {
@@ -730,6 +735,7 @@ interface GqlPageNode {
   author?: string | null
   publishedAt?: string | null
   updatedAt?: string | null
+  templateSuffix?: string | null
 }
 interface BootstrapData {
   collections: { edges: Array<{ node: GqlCollectionNode }> }
@@ -1174,6 +1180,7 @@ function buildLiveData(
       ...(pageNode.author ? { author: pageNode.author } : {}),
       ...(pageNode.publishedAt ? { publishedAt: pageNode.publishedAt } : {}),
       ...(pageNode.updatedAt ? { updatedAt: pageNode.updatedAt } : {}),
+      ...(pageNode.templateSuffix ? { templateSuffix: pageNode.templateSuffix } : {}),
     }
     data.pageByHandle = (handle) => (handle === page.handle ? page : null)
   }
