@@ -87,12 +87,16 @@ export interface Article {
   publishedAt?: string
   tags: string[]
   blogHandle?: string
+  seo?: { title?: string | null; description?: string | null; keywords?: string[] | null } | null
+  templateSuffix?: string | null
 }
 export interface Blog {
   id: string
   handle: string
   title: string
   articles: Article[]
+  seo?: { title?: string | null; description?: string | null; keywords?: string[] | null } | null
+  templateSuffix?: string | null
 }
 
 // ───────────────────────── Pagination + filters ──────────────────
@@ -397,6 +401,8 @@ const ARTICLE_FIELDS = /* GraphQL */ `
     author: authorV2 { name }
     publishedAt
     tags
+    seo { title description keywords }
+    templateSuffix
   }
 `
 
@@ -478,6 +484,8 @@ function normalizeArticle(n: any, blogHandle?: string): Article {
     ...(n.publishedAt ? { publishedAt: n.publishedAt } : {}),
     tags: n.tags ?? [],
     ...(blogHandle ? { blogHandle } : {}),
+    ...(n.seo ? { seo: { title: n.seo.title ?? null, description: n.seo.description ?? null, keywords: n.seo.keywords ?? [] } } : {}),
+    ...(n.templateSuffix ? { templateSuffix: n.templateSuffix } : {}),
   }
 }
 
@@ -773,6 +781,8 @@ export function createStorefrontMethods(
        query Blog($handle: String!, $first: Int!) {
          blog(handle: $handle) {
            id handle title
+           seo { title description keywords }
+           templateSuffix
            articles(first: $first) { nodes { ...ArticleFields } }
          }
        }`,
@@ -785,6 +795,8 @@ export function createStorefrontMethods(
       handle: b.handle,
       title: b.title,
       articles: (b.articles?.nodes ?? []).map((a: any) => normalizeArticle(a, b.handle)),
+      ...(b.seo ? { seo: { title: b.seo.title ?? null, description: b.seo.description ?? null, keywords: b.seo.keywords ?? [] } } : {}),
+      ...(b.templateSuffix ? { templateSuffix: b.templateSuffix } : {}),
     }
   }
 
