@@ -102,6 +102,8 @@ export interface ProductVariant {
 export interface Product {
   /** Storefront GraphQL node id (present for live data). */
   id?: string
+  /** Shopify-style theme template variant (e.g. "bundle"). */
+  templateSuffix?: string | null
   handle: string
   title: string
   price: Money
@@ -157,6 +159,8 @@ export interface ProductMedia {
 export interface Collection {
   /** Backend collection id (Shopify `collection.id`). */
   id?: string
+  /** Shopify-style theme template variant (e.g. "featured"). */
+  templateSuffix?: string | null
   handle: string
   title: string
   /** Optional hero image; falls back to first product's featuredImage. */
@@ -572,6 +576,10 @@ export interface LiveDataOptions {
    * `dataApi.pageByHandle(handle)` synchronously during hydration.
    */
   pageHandle?: string
+  /** Handle of the product/collection detail route being loaded, so its
+   *  template variant (templateSuffix) is prefetched into the bootstrap. */
+  productHandle?: string
+  collectionHandle?: string
   /** Tune how much to load at boot. */
   prefetch?: {
     /** Max collections to fetch (default 20). */
@@ -607,13 +615,14 @@ const PRODUCT_CARD_FIELDS = /* GraphQL */ `
     priceRange { minVariantPrice { amount currencyCode } }
     compareAtPriceRange { maxVariantPrice { amount currencyCode } }
     firstAvailableVariant { id }
+    templateSuffix
   }
 `
 
 const COLLECTIONS_QUERY = /* GraphQL */ `
   ${BOOTSTRAP_SHOP_MENU_FRAGMENTS}
   ${PRODUCT_CARD_FIELDS}
-  query NovaBootstrap($first: Int!, $productFirst: Int!, $productsTop: Int!, $pageHandle: String) {
+  query NovaBootstrap($first: Int!, $productFirst: Int!, $productsTop: Int!, $pageHandle: String, $productHandle: String, $collectionHandle: String) {
     ${BOOTSTRAP_SHOP_MENU}
     page(handle: $pageHandle) {
       handle
@@ -625,6 +634,15 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
       updatedAt
       templateSuffix
     }
+    product(handle: $productHandle) { ...ProductCardBoot }
+    collection(handle: $collectionHandle) {
+      id
+      handle
+      title
+      image { url altText }
+      productsCount { count }
+      templateSuffix
+    }
     collections(first: $first) {
       edges {
         node {
@@ -633,6 +651,7 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
           title
           image { url altText }
           productsCount { count }
+          templateSuffix
           products(first: $productFirst) {
             edges {
               node { ...ProductCardBoot }
@@ -673,7 +692,7 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
 const SAFE_COLLECTIONS_QUERY = /* GraphQL */ `
   ${BOOTSTRAP_SHOP_MENU_FRAGMENTS}
   ${PRODUCT_CARD_FIELDS}
-  query NovaBootstrapSafe($first: Int!, $productsTop: Int!, $pageHandle: String) {
+  query NovaBootstrapSafe($first: Int!, $productsTop: Int!, $pageHandle: String, $productHandle: String, $collectionHandle: String) {
     ${BOOTSTRAP_SHOP_MENU}
     page(handle: $pageHandle) {
       handle
@@ -685,6 +704,15 @@ const SAFE_COLLECTIONS_QUERY = /* GraphQL */ `
       updatedAt
       templateSuffix
     }
+    product(handle: $productHandle) { ...ProductCardBoot }
+    collection(handle: $collectionHandle) {
+      id
+      handle
+      title
+      image { url altText }
+      productsCount { count }
+      templateSuffix
+    }
     collections(first: $first) {
       edges {
         node {
@@ -693,6 +721,7 @@ const SAFE_COLLECTIONS_QUERY = /* GraphQL */ `
           title
           image { url altText }
           productsCount { count }
+          templateSuffix
         }
       }
     }
@@ -718,6 +747,7 @@ interface GqlProductNode {
   priceRange?: { minVariantPrice?: GqlMoney }
   compareAtPriceRange?: { maxVariantPrice?: GqlMoney } | null
   firstAvailableVariant?: { id: string } | null
+  templateSuffix?: string | null
 }
 interface GqlCollectionNode {
   id: string
@@ -726,6 +756,7 @@ interface GqlCollectionNode {
   image?: GqlImg
   productsCount?: { count: number } | null
   products: { edges: Array<{ node: GqlProductNode }> }
+  templateSuffix?: string | null
 }
 interface GqlPageNode {
   handle: string
@@ -741,6 +772,8 @@ interface BootstrapData {
   collections: { edges: Array<{ node: GqlCollectionNode }> }
   products: { edges: Array<{ node: GqlProductNode }> }
   page: GqlPageNode | null
+  product: GqlProductNode | null
+  collection: GqlCollectionNode | null
   localization: {
     country: LocalizedCountry
     availableCountries: LocalizedCountry[]
@@ -779,6 +812,7 @@ function normalizeProduct(p: GqlProductNode): Product {
     ...(p.tags?.length ? { tags: p.tags } : {}),
     ...(p.firstAvailableVariant?.id ? { variantId: p.firstAvailableVariant.id } : {}),
     ...(typeof p.availableForSale === 'boolean' ? { availableForSale: p.availableForSale } : {}),
+    ...(p.templateSuffix ? { templateSuffix: p.templateSuffix } : {}),
   }
 }
 
@@ -793,6 +827,7 @@ function normalizeCollection(c: GqlCollectionNode): Collection {
       : {}),
     // Nested products are optional — the reduced bootstrap (used when a cell
     // errors on the nested products field) omits them.
+    ...(c.templateSuffix ? { templateSuffix: c.templateSuffix } : {}),
     products: (c.products?.edges ?? []).map((e) => normalizeProduct(e.node)),
   }
 }
@@ -828,6 +863,7 @@ const PRODUCT_QUERY = /* GraphQL */ `
       compareAtPriceRange { maxVariantPrice { amount currencyCode } }
       options(first: 10) { name values }
       seo { title description }
+      templateSuffix
       variants(first: 50) {
         nodes {
           id
@@ -1091,6 +1127,8 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
       productFirst: productLimitPerCollection,
       productsTop: topProductLimit,
       pageHandle: opts.pageHandle ?? null,
+      productHandle: opts.productHandle ?? null,
+      collectionHandle: opts.collectionHandle ?? null,
     })
   } catch (err) {
     // The full query nulls out entirely if the cell errors on an optional field
@@ -1107,6 +1145,8 @@ export async function createLiveData(opts: LiveDataOptions): Promise<DataApi> {
       first: collectionLimit,
       productsTop: topProductLimit,
       pageHandle: opts.pageHandle ?? null,
+      productHandle: opts.productHandle ?? null,
+      collectionHandle: opts.collectionHandle ?? null,
     })
   }
   return buildLiveData(boot, graphqlRequest, opts)
@@ -1140,12 +1180,19 @@ function buildLiveData(
   const topProducts: Product[] = (boot?.products.edges ?? []).map((e) =>
     normalizeProduct(e.node),
   )
+  // Index the current detail route's product/collection (prefetched by handle)
+  // so productByHandle/collectionByHandle resolve it even when it isn't in the
+  // top set — this is what lets the theme pick its templateSuffix variant.
+  if (boot?.product) topProducts.push(normalizeProduct(boot.product))
 
   // Themes commonly reference `featured` / `frontpage` / `all` as their homepage
   // collection. Synthesize one when the merchant hasn't created a real
   // collection yet but DOES have Active products — otherwise their first
   // product would never appear on the storefront. Also ensure `allProducts`
   // is wired even when no products exist outside of collections.
+  if (boot?.collection && !collections.some((c) => c.handle === boot!.collection!.handle)) {
+    collections.push(normalizeCollection(boot.collection))
+  }
   if (topProducts.length > 0 && !collections.some((c) => c.handle === 'featured')) {
     collections.unshift({
       handle: 'featured',
