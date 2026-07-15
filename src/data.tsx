@@ -170,6 +170,8 @@ export interface Collection {
   productsCount?: number
   /** Custom metafields ("namespace.key" → value) for dynamic sources. */
   metafields?: Record<string, string | null>
+  /** SEO title/description (merchant-edited) for the document head. */
+  seo?: Seo | null
 }
 export interface Page {
   handle: string
@@ -183,6 +185,8 @@ export interface Page {
   /** Shopify-style template suffix (e.g. "contact"); the theme renders
    *  templates/page.<suffix>.json when set, else the default page template. */
   templateSuffix?: string | null
+  /** SEO title/description (merchant-edited) for the document head. */
+  seo?: Seo | null
 }
 
 /**
@@ -633,8 +637,9 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
       publishedAt
       updatedAt
       templateSuffix
+      seo { title description }
     }
-    product(handle: $productHandle) { ...ProductCardBoot }
+    product(handle: $productHandle) { ...ProductCardBoot seo { title description } }
     collection(handle: $collectionHandle) {
       id
       handle
@@ -642,6 +647,7 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
       image { url altText }
       productsCount { count }
       templateSuffix
+      seo { title description }
     }
     collections(first: $first) {
       edges {
@@ -703,8 +709,9 @@ const SAFE_COLLECTIONS_QUERY = /* GraphQL */ `
       publishedAt
       updatedAt
       templateSuffix
+      seo { title description }
     }
-    product(handle: $productHandle) { ...ProductCardBoot }
+    product(handle: $productHandle) { ...ProductCardBoot seo { title description } }
     collection(handle: $collectionHandle) {
       id
       handle
@@ -712,6 +719,7 @@ const SAFE_COLLECTIONS_QUERY = /* GraphQL */ `
       image { url altText }
       productsCount { count }
       templateSuffix
+      seo { title description }
     }
     collections(first: $first) {
       edges {
@@ -748,6 +756,7 @@ interface GqlProductNode {
   compareAtPriceRange?: { maxVariantPrice?: GqlMoney } | null
   firstAvailableVariant?: { id: string } | null
   templateSuffix?: string | null
+  seo?: { title?: string | null; description?: string | null } | null
 }
 interface GqlCollectionNode {
   id: string
@@ -757,6 +766,7 @@ interface GqlCollectionNode {
   productsCount?: { count: number } | null
   products: { edges: Array<{ node: GqlProductNode }> }
   templateSuffix?: string | null
+  seo?: { title?: string | null; description?: string | null } | null
 }
 interface GqlPageNode {
   handle: string
@@ -767,6 +777,7 @@ interface GqlPageNode {
   publishedAt?: string | null
   updatedAt?: string | null
   templateSuffix?: string | null
+  seo?: { title?: string | null; description?: string | null } | null
 }
 interface BootstrapData {
   collections: { edges: Array<{ node: GqlCollectionNode }> }
@@ -813,6 +824,7 @@ function normalizeProduct(p: GqlProductNode): Product {
     ...(p.firstAvailableVariant?.id ? { variantId: p.firstAvailableVariant.id } : {}),
     ...(typeof p.availableForSale === 'boolean' ? { availableForSale: p.availableForSale } : {}),
     ...(p.templateSuffix ? { templateSuffix: p.templateSuffix } : {}),
+    ...(p.seo ? { seo: { title: p.seo.title ?? null, description: p.seo.description ?? null } } : {}),
   }
 }
 
@@ -828,6 +840,7 @@ function normalizeCollection(c: GqlCollectionNode): Collection {
     // Nested products are optional — the reduced bootstrap (used when a cell
     // errors on the nested products field) omits them.
     ...(c.templateSuffix ? { templateSuffix: c.templateSuffix } : {}),
+    ...(c.seo ? { seo: { title: c.seo.title ?? null, description: c.seo.description ?? null } } : {}),
     products: (c.products?.edges ?? []).map((e) => normalizeProduct(e.node)),
   }
 }
