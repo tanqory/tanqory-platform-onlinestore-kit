@@ -29,6 +29,7 @@ export interface ImageRef {
 export interface Seo {
   title?: string | null
   description?: string | null
+  keywords?: string[] | null
 }
 /** Per-variant cart quantity bounds (wholesale / case-of-N). Storefront cart enforces these. */
 export interface QuantityRule {
@@ -637,9 +638,9 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
       publishedAt
       updatedAt
       templateSuffix
-      seo { title description }
+      seo { title description keywords }
     }
-    product(handle: $productHandle) { ...ProductCardBoot seo { title description } }
+    product(handle: $productHandle) { ...ProductCardBoot seo { title description keywords } }
     collection(handle: $collectionHandle) {
       id
       handle
@@ -647,7 +648,7 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
       image { url altText }
       productsCount { count }
       templateSuffix
-      seo { title description }
+      seo { title description keywords }
     }
     collections(first: $first) {
       edges {
@@ -709,9 +710,9 @@ const SAFE_COLLECTIONS_QUERY = /* GraphQL */ `
       publishedAt
       updatedAt
       templateSuffix
-      seo { title description }
+      seo { title description keywords }
     }
-    product(handle: $productHandle) { ...ProductCardBoot seo { title description } }
+    product(handle: $productHandle) { ...ProductCardBoot seo { title description keywords } }
     collection(handle: $collectionHandle) {
       id
       handle
@@ -719,7 +720,7 @@ const SAFE_COLLECTIONS_QUERY = /* GraphQL */ `
       image { url altText }
       productsCount { count }
       templateSuffix
-      seo { title description }
+      seo { title description keywords }
     }
     collections(first: $first) {
       edges {
@@ -756,7 +757,7 @@ interface GqlProductNode {
   compareAtPriceRange?: { maxVariantPrice?: GqlMoney } | null
   firstAvailableVariant?: { id: string } | null
   templateSuffix?: string | null
-  seo?: { title?: string | null; description?: string | null } | null
+  seo?: { title?: string | null; description?: string | null; keywords?: string[] | null } | null
 }
 interface GqlCollectionNode {
   id: string
@@ -766,7 +767,7 @@ interface GqlCollectionNode {
   productsCount?: { count: number } | null
   products: { edges: Array<{ node: GqlProductNode }> }
   templateSuffix?: string | null
-  seo?: { title?: string | null; description?: string | null } | null
+  seo?: { title?: string | null; description?: string | null; keywords?: string[] | null } | null
 }
 interface GqlPageNode {
   handle: string
@@ -777,7 +778,7 @@ interface GqlPageNode {
   publishedAt?: string | null
   updatedAt?: string | null
   templateSuffix?: string | null
-  seo?: { title?: string | null; description?: string | null } | null
+  seo?: { title?: string | null; description?: string | null; keywords?: string[] | null } | null
 }
 interface BootstrapData {
   collections: { edges: Array<{ node: GqlCollectionNode }> }
@@ -824,7 +825,7 @@ function normalizeProduct(p: GqlProductNode): Product {
     ...(p.firstAvailableVariant?.id ? { variantId: p.firstAvailableVariant.id } : {}),
     ...(typeof p.availableForSale === 'boolean' ? { availableForSale: p.availableForSale } : {}),
     ...(p.templateSuffix ? { templateSuffix: p.templateSuffix } : {}),
-    ...(p.seo ? { seo: { title: p.seo.title ?? null, description: p.seo.description ?? null } } : {}),
+    ...(p.seo ? { seo: { title: p.seo.title ?? null, description: p.seo.description ?? null, keywords: p.seo.keywords ?? [] } } : {}),
   }
 }
 
@@ -840,7 +841,7 @@ function normalizeCollection(c: GqlCollectionNode): Collection {
     // Nested products are optional — the reduced bootstrap (used when a cell
     // errors on the nested products field) omits them.
     ...(c.templateSuffix ? { templateSuffix: c.templateSuffix } : {}),
-    ...(c.seo ? { seo: { title: c.seo.title ?? null, description: c.seo.description ?? null } } : {}),
+    ...(c.seo ? { seo: { title: c.seo.title ?? null, description: c.seo.description ?? null, keywords: c.seo.keywords ?? [] } } : {}),
     products: (c.products?.edges ?? []).map((e) => normalizeProduct(e.node)),
   }
 }
@@ -875,7 +876,7 @@ const PRODUCT_QUERY = /* GraphQL */ `
       priceRange { minVariantPrice { amount currencyCode } }
       compareAtPriceRange { maxVariantPrice { amount currencyCode } }
       options(first: 10) { name values }
-      seo { title description }
+      seo { title description keywords }
       templateSuffix
       variants(first: 50) {
         nodes {
@@ -973,7 +974,7 @@ interface GqlProductDetailNode extends GqlProductNode {
   images?: { nodes: GqlImg[] }
   media?: { nodes: GqlMediaNode[] }
   options?: Array<{ name: string; values: string[] }>
-  seo?: { title?: string | null; description?: string | null } | null
+  seo?: { title?: string | null; description?: string | null; keywords?: string[] | null } | null
   variants?: { nodes: GqlVariantNode[] }
   sellingPlanGroups?: { nodes: GqlSellingPlanGroupNode[] }
   metafields?: Array<{ namespace: string; key: string; value: string | null } | null>
@@ -1055,7 +1056,7 @@ function normalizeProductDetail(p: GqlProductDetailNode): Product {
     ...(images.length ? { images } : {}),
     ...(media.length ? { media } : {}),
     ...(p.options?.length ? { options: p.options } : {}),
-    ...(p.seo ? { seo: { title: p.seo.title ?? null, description: p.seo.description ?? null } } : {}),
+    ...(p.seo ? { seo: { title: p.seo.title ?? null, description: p.seo.description ?? null, keywords: p.seo.keywords ?? [] } } : {}),
     ...(variants.length ? { variants } : {}),
     ...(sellingPlanGroups.length ? { sellingPlanGroups } : {}),
     ...(Object.keys(metafields).length ? { metafields } : {}),
