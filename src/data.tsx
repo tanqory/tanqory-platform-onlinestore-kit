@@ -572,6 +572,13 @@ export interface LiveDataOptions {
    * base currency if no Market matches the country.
    */
   country?: string
+  /**
+   * Content language (BCP-47-ish, e.g. "th", "zh-TW"). When set, the backend
+   * overlays the merchant's translations for this locale onto product/
+   * collection/page content (X-Tanqory-Lang). Falls back to default-language
+   * content when a resource has no translation. Independent of `country`.
+   */
+  locale?: string
   /** Optional fetch override (testing / SSR). */
   fetcher?: typeof fetch
   /**
@@ -1096,6 +1103,9 @@ function makeGraphqlRequest(opts: LiveDataOptions): GraphqlRequester {
         // has an active Market with this country, Money.currencyCode + amount
         // come back already-converted in the target currency.
         ...(opts.country ? { 'x-tanqory-country': opts.country.toUpperCase() } : {}),
+        // X-Tanqory-Lang triggers translation overlay: product/collection/page
+        // content comes back in this locale where the merchant has translations.
+        ...(opts.locale ? { 'x-tanqory-lang': opts.locale.toLowerCase() } : {}),
       },
       body: JSON.stringify({ query, variables }),
     })
