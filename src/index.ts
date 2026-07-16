@@ -2,9 +2,12 @@
 export { defineSection } from './defineSection'
 export {
   createAnalytics,
+  getAnalytics,
+  subscribe,
   type Analytics,
   type AnalyticsOptions,
   type StorefrontEventType,
+  type StorefrontEvent,
 } from './analytics'
 export {
   getConsent,
