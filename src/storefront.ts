@@ -216,6 +216,13 @@ export interface Shop {
     enabled: boolean
     dataSharingTitle?: string | null
     dataSharingVisible?: boolean
+    title?: string | null
+    body?: string | null
+    acceptLabel?: string | null
+    declineLabel?: string | null
+    manageLabel?: string | null
+    position?: string | null
+    colorTheme?: string | null
   } | null
   /** Primary storefront domain (for canonical URLs / SEO). */
   primaryDomain?: {
@@ -577,6 +584,13 @@ function normalizeShop(n: any): Shop | null {
           enabled: Boolean(n.cookieBanner.enabled),
           dataSharingTitle: n.cookieBanner.dataSharingTitle ?? null,
           dataSharingVisible: n.cookieBanner.dataSharingVisible !== false,
+          title: n.cookieBanner.title ?? null,
+          body: n.cookieBanner.body ?? null,
+          acceptLabel: n.cookieBanner.acceptLabel ?? null,
+          declineLabel: n.cookieBanner.declineLabel ?? null,
+          manageLabel: n.cookieBanner.manageLabel ?? null,
+          position: n.cookieBanner.position ?? null,
+          colorTheme: n.cookieBanner.colorTheme ?? null,
         }
       : null,
     primaryDomain: n.primaryDomain
@@ -615,7 +629,7 @@ export const BOOTSTRAP_SHOP_MENU = /* GraphQL */ `
     termsOfService { handle title url }
     shippingPolicy { handle title url }
     subscriptionPolicy { handle title url }
-    cookieBanner { enabled dataSharingTitle dataSharingVisible }
+    cookieBanner { enabled dataSharingTitle dataSharingVisible title body acceptLabel declineLabel manageLabel position colorTheme }
     primaryDomain { host url sslEnabled }
     paymentSettings { acceptedCardBrands supportedDigitalWallets currencyCode }
   }

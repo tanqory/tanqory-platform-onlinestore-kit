@@ -6,6 +6,16 @@ export {
   type AnalyticsOptions,
   type StorefrontEventType,
 } from './analytics'
+export {
+  getConsent,
+  setConsent,
+  hasConsent,
+  hasDecided,
+  setBannerRequired,
+  isBannerRequired,
+  onConsentChange,
+  type Consent,
+} from './consent'
 export { defineTheme, defineSettings, type ThemeConfig, type SettingsSchema } from './config'
 export { ThemeProvider, useSettings, useT } from './theme-context'
 export { mount, type MountOptions } from './mount'
