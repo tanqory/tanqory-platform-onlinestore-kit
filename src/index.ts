@@ -1,5 +1,11 @@
 // @tanqory/theme-kit — public API. Themes import only from here.
 export { defineSection } from './defineSection'
+export {
+  createAnalytics,
+  type Analytics,
+  type AnalyticsOptions,
+  type StorefrontEventType,
+} from './analytics'
 export { defineTheme, defineSettings, type ThemeConfig, type SettingsSchema } from './config'
 export { ThemeProvider, useSettings, useT } from './theme-context'
 export { mount, type MountOptions } from './mount'
