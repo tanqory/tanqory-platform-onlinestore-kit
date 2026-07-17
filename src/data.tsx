@@ -375,13 +375,26 @@ export function createMockData(collections: Collection[]): DataApi {
   // Flatten products from every collection once; subsequent lookups are O(1)
   // by handle. A product appearing in multiple collections returns the first
   // occurrence — matching the storefront's "canonical product page" semantics.
+  //
+  // Exception: the SAME product arrives in two shapes. Collection/top listings
+  // come from the card fragment, which carries no `seo`; the current route's
+  // product is fetched with `seo { title description keywords }` and appended
+  // afterwards. First-wins therefore indexed the seo-less card and dropped the
+  // detail copy, so computeHead() found no seo.title and fell back to
+  // "<product> — <shop>", emitting no description at all. Let the record that
+  // actually has SEO win, whatever order it arrives in.
   const productsByHandle = new Map<string, Product>()
   const allProducts: Product[] = []
   for (const c of collections) {
     for (const p of c.products) {
-      if (!productsByHandle.has(p.handle)) {
+      const prev = productsByHandle.get(p.handle)
+      if (!prev) {
         productsByHandle.set(p.handle, p)
         allProducts.push(p)
+      } else if (!prev.seo && p.seo) {
+        productsByHandle.set(p.handle, p)
+        const i = allProducts.indexOf(prev)
+        if (i !== -1) allProducts[i] = p
       }
     }
   }
