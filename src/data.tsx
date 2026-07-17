@@ -335,6 +335,30 @@ export interface Localization {
 
 const DataContext = createContext<DataApi | null>(null)
 
+/**
+ * Handles are Unicode now (a Thai title no longer collapses to "4" or ""), and
+ * a theme reads the handle out of `location.pathname`, which hands it back
+ * PERCENT-ENCODED — "เสื้อยืด" arrives as "%E0%B9%80…". Our indexes are keyed by
+ * the real handle, so an exact lookup misses and the theme quietly renders a
+ * fallback: nova's PDP showed a different product's data, and computeHead fell
+ * back to the shop name, so every non-Latin product lost its SEO title.
+ *
+ * Fixing the themes is not enough — a marketplace theme ships its own copy of
+ * the code and cannot be force-updated. Normalizing here reaches every theme,
+ * old and new, on the next rebuild (theme-kit is part of the runtime's dist
+ * fingerprint). A handle can't contain `%`, so this is a no-op for one that is
+ * already decoded; malformed input falls back to the raw string.
+ */
+function decodeHandle(handle: string): string {
+  if (!handle || !handle.includes('%')) return handle
+  try {
+    return decodeURIComponent(handle)
+  } catch {
+    return handle
+  }
+}
+
+
 /** Wraps the app with a theme-provided data source (mock or live). */
 export function DataProvider({ value, children }: { value: DataApi; children: ReactNode }): JSX.Element {
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>
@@ -454,9 +478,11 @@ export function createMockData(collections: Collection[]): DataApi {
   }
 
   return {
-    collectionByHandle: (handle) => collections.find((c) => c.handle === handle) ?? null,
+    collectionByHandle: (handle) =>
+      collections.find((c) => c.handle === handle || c.handle === decodeHandle(handle)) ?? null,
     allCollections: () => collections,
-    productByHandle: (handle) => productsByHandle.get(handle) ?? null,
+    productByHandle: (handle) =>
+      productsByHandle.get(handle) ?? productsByHandle.get(decodeHandle(handle)) ?? null,
     pageByHandle: () => null,
     // Localization mirrors what the store DASHBOARD (Markets) would publish —
     // NOT a theme config list. Countries carry their currency; languages are the
@@ -481,8 +507,8 @@ export function createMockData(collections: Collection[]): DataApi {
     // ── Shopify-parity extensions, served offline from the fixtures above so
     //    themes built against `useData()` behave the same in mock + live. ──
     shop,
-    menu: (handle) => menus.get(handle) ?? null,
-    fetchMenu: async (handle) => menus.get(handle) ?? null,
+    menu: (handle) => menus.get(handle) ?? menus.get(decodeHandle(handle)) ?? null,
+    fetchMenu: async (handle) => menus.get(handle) ?? menus.get(decodeHandle(handle)) ?? null,
     listMenus: async () =>
       Array.from(menus.values()).map((m) => ({
         handle: m.handle,
@@ -517,9 +543,14 @@ export function createMockData(collections: Collection[]): DataApi {
       return { products: (c?.products ?? []).slice(0, opts?.first ?? 24), filters: [], pageInfo: EMPTY_PI }
     },
     productRecommendations: async (productId) => allProducts.filter((p) => p.id !== productId).slice(0, 4),
-    blogByHandle: async (handle) => (handle === blog.handle ? blog : null),
+    blogByHandle: async (handle) =>
+      handle === blog.handle || decodeHandle(handle) === blog.handle ? blog : null,
     articleByHandle: async (blogHandle, articleHandle) =>
-      blogHandle === blog.handle ? articles.find((a) => a.handle === articleHandle) ?? null : null,
+      blogHandle === blog.handle || decodeHandle(blogHandle) === blog.handle
+        ? articles.find(
+            (a) => a.handle === articleHandle || a.handle === decodeHandle(articleHandle),
+          ) ?? null
+        : null,
     metaobject: async () => null,
     metaobjects: async () => [],
     customer: {
@@ -1253,7 +1284,8 @@ function buildLiveData(
       ...(pageNode.updatedAt ? { updatedAt: pageNode.updatedAt } : {}),
       ...(pageNode.templateSuffix ? { templateSuffix: pageNode.templateSuffix } : {}),
     }
-    data.pageByHandle = (handle) => (handle === page.handle ? page : null)
+    data.pageByHandle = (handle) =>
+      handle === page.handle || decodeHandle(handle) === page.handle ? page : null
   }
   const loc = boot?.localization
   if (loc) {
@@ -1334,7 +1366,7 @@ function buildLiveData(
   // them synchronously (the layout's header/footer render at hydration).
   const { shop, menus } = readBootstrapShopMenu(boot)
   data.shop = shop
-  data.menu = (handle: string) => menus.get(handle) ?? null
+  data.menu = (handle: string) => menus.get(handle) ?? menus.get(decodeHandle(handle)) ?? null
   // The rest (search, blog, recommendations, metaobjects, customer account)
   // are lazy — attach them on the same requester. fetchMenu shares `menus` so
   // a later fetch warms the same cache the sync menu() reads.
