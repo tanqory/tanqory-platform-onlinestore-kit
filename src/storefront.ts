@@ -199,8 +199,16 @@ export interface Shop {
   description?: string | null
   brand?: {
     logo?: Image | null
+    squareLogo?: Image | null
     slogan?: string | null
     shortDescription?: string | null
+    /** Settings → Brand. `primary[0]` is the brand colour; themes should treat
+     *  the rest as an ordered palette. Every field is nullable — an
+     *  unconfigured store yields nulls, never an error. */
+    colors?: {
+      primary: { background?: string | null; foreground?: string | null }[]
+      secondary: { background?: string | null; foreground?: string | null }[]
+    } | null
   } | null
   /** Custom shop metafields ("namespace.key" → value) for dynamic sources. */
   metafields?: Record<string, string | null>
@@ -568,8 +576,17 @@ function normalizeShop(n: any): Shop | null {
     brand: n.brand
       ? {
           logo: img(n.brand.logo),
+          squareLogo: img(n.brand.squareLogo),
           slogan: n.brand.slogan ?? null,
           shortDescription: n.brand.shortDescription ?? null,
+          // Colour groups arrive as arrays and can be empty; keep the shape
+          // stable so a theme can index `primary[0]` without guarding twice.
+          colors: n.brand.colors
+            ? {
+                primary: n.brand.colors.primary ?? [],
+                secondary: n.brand.colors.secondary ?? [],
+              }
+            : null,
         }
       : null,
     policies: {
@@ -623,7 +640,22 @@ export const BOOTSTRAP_SHOP_MENU = /* GraphQL */ `
   shop {
     name
     description
-    brand { logo { url altText } slogan shortDescription }
+    # Ask for the whole brand, not a third of it. Settings → Brand persists a
+    # logo, a square logo and brand colours; the SDL has carried them all along
+    # and this selection took only logo/slogan/shortDescription, so a merchant
+    # could upload a logo and set colours and their storefront never changed.
+    # Nullable throughout (BrandColorGroup.background/foreground are String),
+    # so an unconfigured store returns nulls rather than failing the query.
+    brand {
+      logo { url altText }
+      squareLogo { url altText }
+      slogan
+      shortDescription
+      colors {
+        primary { background foreground }
+        secondary { background foreground }
+      }
+    }
     privacyPolicy { handle title url }
     refundPolicy { handle title url }
     termsOfService { handle title url }
