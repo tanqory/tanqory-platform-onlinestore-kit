@@ -1,0 +1,39 @@
+name: Publish @tanqory/theme-kit
+
+# Publishes the package to GitHub Packages when a semver tag (v*) is pushed.
+# Cut a release: `npm version patch && git push --follow-tags` (or push a v* tag).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://npm.pkg.github.com
+          scope: '@tanqory'
+
+      - name: Install deps
+        run: pnpm install --no-frozen-lockfile --ignore-scripts
+
+      - name: Build (vite + d.ts)
+        run: pnpm build
+
+      - name: Publish to GitHub Packages
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
