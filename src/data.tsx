@@ -649,6 +649,7 @@ export function createMockData(collections: Collection[]): DataApi {
       register: async () => ({ ok: false, errors: ['Customer accounts need live data (mock mode).'] }),
       get: async () => null,
       orders: async () => [],
+      paymentMethods: async () => [],
       orderByLookup: async () => null,
       createAddress: async () => ({ ok: false, errors: ['mock mode'] }),
       updateAddress: async () => ({ ok: false, errors: ['mock mode'] }),
