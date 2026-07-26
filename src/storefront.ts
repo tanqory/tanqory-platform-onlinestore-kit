@@ -301,6 +301,18 @@ export interface Order {
   fulfillmentStatus: string
   totalPrice: Money
   statusUrl: string
+  /** Contact + cancellation (Shopify `order.email`/`phone`/`cancelled`/`cancel_reason`). */
+  email?: string | null
+  phone?: string | null
+  cancelled?: boolean
+  cancelReason?: string | null
+  /** Price breakdown (Shopify `order.subtotal_price`/`tax_price`/`shipping_price`). */
+  subtotalPrice?: Money | null
+  totalTax?: Money | null
+  totalShippingPrice?: Money | null
+  /** Shipping / billing address (Shopify `order.shipping_address`/`billing_address`). */
+  shippingAddress?: CustomerAddress | null
+  billingAddress?: CustomerAddress | null
   lineItems: OrderLineItem[]
 }
 export interface CustomerAddressInput {
@@ -463,7 +475,14 @@ const CUSTOMER_FIELDS = /* GraphQL */ `
 const ORDER_FIELDS = /* GraphQL */ `
   fragment OrderFields on Order {
     id name orderNumber processedAt financialStatus fulfillmentStatus statusUrl
+    email phone cancelled cancelReason
     currentTotalPrice { amount currencyCode }
+    subtotalPrice { amount currencyCode }
+    totalTax { amount currencyCode }
+    totalShippingPrice { amount currencyCode }
+    totalPrice { amount currencyCode }
+    shippingAddress { id firstName lastName company address1 address2 city province country zip phone }
+    billingAddress { id firstName lastName company address1 address2 city province country zip phone }
     lineItems(first: 50) {
       nodes {
         title variantTitle quantity
@@ -565,8 +584,17 @@ function normalizeOrder(n: any): Order {
     processedAt: n.processedAt,
     financialStatus: n.financialStatus ?? null,
     fulfillmentStatus: n.fulfillmentStatus ?? 'UNFULFILLED',
-    totalPrice: n.currentTotalPrice ?? ZERO,
+    totalPrice: n.currentTotalPrice ?? n.totalPrice ?? ZERO,
     statusUrl: n.statusUrl ?? '',
+    email: n.email ?? null,
+    phone: n.phone ?? null,
+    ...(typeof n.cancelled === 'boolean' ? { cancelled: n.cancelled } : {}),
+    cancelReason: n.cancelReason ?? null,
+    ...(n.subtotalPrice ? { subtotalPrice: n.subtotalPrice } : {}),
+    ...(n.totalTax ? { totalTax: n.totalTax } : {}),
+    ...(n.totalShippingPrice ? { totalShippingPrice: n.totalShippingPrice } : {}),
+    ...(n.shippingAddress ? { shippingAddress: normalizeAddress(n.shippingAddress) } : {}),
+    ...(n.billingAddress ? { billingAddress: normalizeAddress(n.billingAddress) } : {}),
     lineItems: (n.lineItems?.nodes ?? []).map((li: any) => ({
       title: li.title,
       variantTitle: li.variantTitle ?? null,
