@@ -203,6 +203,8 @@ export interface Product {
   variants?: ProductVariant[]
   /** Subscription / selling-plan groups — only after `fetchProduct()`. */
   sellingPlanGroups?: SellingPlanGroup[]
+  /** Collections this product belongs to (Shopify `product.collections`) — after `fetchProduct()`. */
+  collections?: Array<{ handle: string; title: string }>
   /** True for gift-card products (Shopify `product.gift_card`) — after `fetchProduct()`. */
   isGiftCard?: boolean
   /** Total on-hand stock across variants (Shopify `product.totalInventory`). */
@@ -1019,6 +1021,7 @@ const PRODUCT_QUERY = /* GraphQL */ `
       priceRange { minVariantPrice { amount currencyCode } }
       compareAtPriceRange { maxVariantPrice { amount currencyCode } }
       options(first: 10) { name values }
+      collections(first: 10) { nodes { handle title } }
       seo { title description keywords }
       templateSuffix
       variants(first: 50) {
@@ -1202,6 +1205,9 @@ function normalizeProductDetail(p: GqlProductDetailNode): Product {
     ...(p.seo ? { seo: { title: p.seo.title ?? null, description: p.seo.description ?? null, keywords: p.seo.keywords ?? [] } } : {}),
     ...(variants.length ? { variants } : {}),
     ...(sellingPlanGroups.length ? { sellingPlanGroups } : {}),
+    ...(p.collections?.nodes?.length
+      ? { collections: p.collections.nodes.map((c: { handle: string; title: string }) => ({ handle: c.handle, title: c.title })) }
+      : {}),
     ...(Object.keys(metafields).length ? { metafields } : {}),
   }
 }

@@ -116,6 +116,8 @@ export interface Filter {
   id: string
   label: string
   type: string
+  /** How to render values (Shopify `filter.presentation`): TEXT | IMAGE | SWATCH. */
+  presentation?: string | null
   values: Array<{ id: string; label: string; count: number; input: string }>
 }
 
@@ -139,6 +141,7 @@ function normalizeFilters(arr: any): Filter[] {
     id: f.id,
     label: f.label,
     type: f.type,
+    ...(f.presentation ? { presentation: f.presentation } : {}),
     values: (f.values ?? []).map((v: any) => ({
       id: v.id,
       label: v.label,
@@ -768,7 +771,7 @@ export function createStorefrontMethods(
          collection(handle: $handle) {
            products(first: $first, after: $after, sortKey: $sortKey, reverse: $reverse, filters: $filters) {
              nodes { ...ProductCard }
-             filters { id label type values { id label count input } }
+             filters { id label type presentation values { id label count input } }
              pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
            }
          }
