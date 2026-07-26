@@ -38,6 +38,9 @@ export interface StorefrontHelpers {
 export interface Image {
   url: string
   altText?: string
+  width?: number | null
+  height?: number | null
+  aspectRatio?: number | null
 }
 export interface Seo {
   title?: string | null
@@ -412,7 +415,7 @@ const ARTICLE_FIELDS = /* GraphQL */ `
     title
     excerpt
     contentHtml
-    image { url altText }
+    image { url altText width height }
     author: authorV2 { name }
     publishedAt
     tags
@@ -430,7 +433,7 @@ const PRODUCT_CARD = /* GraphQL */ `
     vendor
     productType
     tags
-    featuredImage { url altText }
+    featuredImage { url altText width height }
     priceRange { minVariantPrice { amount currencyCode } }
     compareAtPriceRange { maxVariantPrice { amount currencyCode } }
     firstAvailableVariant { id }
@@ -457,7 +460,7 @@ const ORDER_FIELDS = /* GraphQL */ `
       nodes {
         title variantTitle quantity
         discountedTotalPrice { amount currencyCode }
-        variant { image { url altText } }
+        variant { image { url altText width height } }
       }
     }
   }
@@ -647,8 +650,8 @@ export const BOOTSTRAP_SHOP_MENU = /* GraphQL */ `
     # Nullable throughout (BrandColorGroup.background/foreground are String),
     # so an unconfigured store returns nulls rather than failing the query.
     brand {
-      logo { url altText }
-      squareLogo { url altText }
+      logo { url altText width height }
+      squareLogo { url altText width height }
       slogan
       shortDescription
       colors {
@@ -787,7 +790,7 @@ export function createStorefrontMethods(
          predictiveSearch(query: $query, limit: $limit) {
            queries { text }
            products { ...ProductCard }
-           collections { handle title image { url altText } }
+           collections { handle title image { url altText width height } }
            pages { handle title }
            articles { ...ArticleFields }
          }

@@ -24,6 +24,11 @@ export interface ProductOption {
 export interface ImageRef {
   url: string
   altText?: string
+  /** Intrinsic pixel dimensions (Shopify `image.width`/`image.height`). */
+  width?: number | null
+  height?: number | null
+  /** width / height (Shopify `image.aspect_ratio`) — for responsive layouts. */
+  aspectRatio?: number | null
 }
 /** SEO snapshot (Product/Page/Article). */
 export interface Seo {
@@ -667,7 +672,7 @@ const PRODUCT_CARD_FIELDS = /* GraphQL */ `
     vendor
     productType
     tags
-    featuredImage { url altText }
+    featuredImage { url altText width height }
     priceRange { minVariantPrice { amount currencyCode } }
     compareAtPriceRange { maxVariantPrice { amount currencyCode } }
     firstAvailableVariant { id }
@@ -696,7 +701,7 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
       id
       handle
       title
-      image { url altText }
+      image { url altText width height }
       productsCount { count }
       templateSuffix
       seo { title description keywords }
@@ -707,7 +712,7 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
           id
           handle
           title
-          image { url altText }
+          image { url altText width height }
           productsCount { count }
           templateSuffix
           products(first: $productFirst) {
@@ -768,7 +773,7 @@ const SAFE_COLLECTIONS_QUERY = /* GraphQL */ `
       id
       handle
       title
-      image { url altText }
+      image { url altText width height }
       productsCount { count }
       templateSuffix
       seo { title description keywords }
@@ -779,7 +784,7 @@ const SAFE_COLLECTIONS_QUERY = /* GraphQL */ `
           id
           handle
           title
-          image { url altText }
+          image { url altText width height }
           productsCount { count }
           templateSuffix
         }
@@ -794,7 +799,7 @@ const SAFE_COLLECTIONS_QUERY = /* GraphQL */ `
 `
 
 interface GqlMoney { amount: string; currencyCode: string }
-type GqlImg = { url?: string; altText?: string | null } | null | undefined
+type GqlImg = { url?: string; altText?: string | null; width?: number | null; height?: number | null } | null | undefined
 interface GqlProductNode {
   id: string
   handle: string
@@ -849,11 +854,16 @@ interface BootstrapData {
   footerMenu?: unknown
 }
 
-function normalizeImage(img: GqlImg): { url: string; altText?: string } | null {
+function normalizeImage(img: GqlImg): ImageRef | null {
   if (!img || !img.url) return null
+  const width = img.width ?? null
+  const height = img.height ?? null
   return {
     url: img.url,
     ...(img.altText ? { altText: img.altText } : {}),
+    ...(width != null ? { width } : {}),
+    ...(height != null ? { height } : {}),
+    ...(width && height ? { aspectRatio: width / height } : {}),
   }
 }
 
@@ -913,15 +923,15 @@ const PRODUCT_QUERY = /* GraphQL */ `
       availableForSale
       isGiftCard
       totalInventory
-      featuredImage { url altText }
-      images(first: 20) { nodes { url altText } }
+      featuredImage { url altText width height }
+      images(first: 20) { nodes { url altText width height } }
       media(first: 20) {
         nodes {
           __typename
-          ... on MediaImage { id alt image { url altText } }
-          ... on Video { id alt previewImage { url altText } sources { url mimeType format } }
-          ... on Model3d { id alt previewImage { url altText } sources { url mimeType format } }
-          ... on ExternalVideo { id alt host embedUrl previewImage { url altText } }
+          ... on MediaImage { id alt image { url altText width height } }
+          ... on Video { id alt previewImage { url altText width height } sources { url mimeType format } }
+          ... on Model3d { id alt previewImage { url altText width height } sources { url mimeType format } }
+          ... on ExternalVideo { id alt host embedUrl previewImage { url altText width height } }
         }
       }
       priceRange { minVariantPrice { amount currencyCode } }
@@ -943,7 +953,7 @@ const PRODUCT_QUERY = /* GraphQL */ `
           weight { value unit }
           price { amount currencyCode }
           compareAtPrice { amount currencyCode }
-          image { url altText }
+          image { url altText width height }
           selectedOptions { name value }
           unitPrice { amount currencyCode }
           unitPriceMeasurement { measuredType quantityValue quantityUnit referenceValue referenceUnit }
