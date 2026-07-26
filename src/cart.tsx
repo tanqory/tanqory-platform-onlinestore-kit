@@ -305,6 +305,13 @@ interface GqlCart {
     nodes: Array<{
       id: string
       quantity: number
+      attributes?: Array<{ key: string; value?: string | null }>
+      discountAllocations?: Array<{ title?: string | null; code?: string | null; discountedAmount?: Money }>
+      sellingPlanAllocation?: {
+        sellingPlan?: { id: string; name: string } | null
+        checkoutChargeAmount?: Money | null
+        remainingBalanceChargeAmount?: Money | null
+      } | null
       cost: { subtotalAmount: Money; amountPerQuantity: Money }
       merchandise: {
         id: string
@@ -350,7 +357,7 @@ function normalizeCart(c: GqlCart): Omit<CartState, 'loading' | 'ready' | 'error
       ...(m.product?.handle ? { productHandle: m.product.handle } : {}),
       ...(n.attributes?.length ? { attributes: n.attributes.map((a: any) => ({ key: a.key, value: a.value ?? null })) } : {}),
       ...(n.discountAllocations?.length
-        ? { discountAllocations: n.discountAllocations.map((d: any) => ({ title: d.title ?? null, code: d.code ?? null, amount: d.discountedAmount ?? ZERO_MONEY })) }
+        ? { discountAllocations: n.discountAllocations.map((d: any) => ({ title: d.title ?? null, code: d.code ?? null, amount: d.discountedAmount ?? money(0, m.price?.currencyCode ?? 'USD') })) }
         : {}),
       ...(n.sellingPlanAllocation?.sellingPlan
         ? { sellingPlanAllocation: {

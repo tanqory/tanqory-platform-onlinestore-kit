@@ -1123,6 +1123,7 @@ interface GqlProductDetailNode extends GqlProductNode {
   seo?: { title?: string | null; description?: string | null; keywords?: string[] | null } | null
   variants?: { nodes: GqlVariantNode[] }
   sellingPlanGroups?: { nodes: GqlSellingPlanGroupNode[] }
+  collections?: { nodes: Array<{ handle: string; title: string }> }
   metafields?: Array<{ namespace: string; key: string; value: string | null } | null>
 }
 
