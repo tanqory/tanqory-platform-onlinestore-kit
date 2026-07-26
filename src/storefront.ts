@@ -317,6 +317,21 @@ export interface Order {
   fulfillments?: Array<{ trackingCompany?: string | null; trackingInfo: Array<{ number?: string | null; url?: string | null }> }>
   lineItems: OrderLineItem[]
 }
+/** A saved payment method on the customer account (Shopify `customer_payment_method`). */
+export interface CustomerPaymentMethod {
+  id: string
+  isDefault: boolean
+  isActive: boolean
+  /** CARD | BANK_ACCOUNT | PROMPTPAY | TRUEMONEY */
+  type: string
+  card?: {
+    brand?: string | null
+    lastDigits?: string | null
+    expiryMonth?: number | null
+    expiryYear?: number | null
+    name?: string | null
+  } | null
+}
 export interface CustomerAddressInput {
   firstName?: string
   lastName?: string
@@ -362,6 +377,8 @@ export interface CustomerApi {
   get(token: string): Promise<Customer | null>
   /** Order history. */
   orders(token: string, opts?: { first?: number }): Promise<Order[]>
+  /** Saved payment methods (Shopify `customer.payment_methods`). */
+  paymentMethods(token: string): Promise<CustomerPaymentMethod[]>
   /** Guest order lookup — orderNumber + email (no account needed). */
   orderByLookup(orderNumber: string, email: string): Promise<Order | null>
   createAddress(token: string, address: CustomerAddressInput): Promise<MutationResult<{ id: string }>>
@@ -1006,6 +1023,32 @@ export function createStorefrontMethods(
         { t: token },
       )
       return res?.customer ? normalizeCustomer(res.customer) : null
+    },
+    async paymentMethods(token) {
+      const res = await graphql<{ customer: { paymentMethods?: any[] } | null }>(
+        `query PaymentMethods($t: String) {
+           customer(customerAccessToken: $t) {
+             paymentMethods {
+               id isDefault isActive type
+               card { brand lastDigits expiryMonth expiryYear name }
+             }
+           }
+         }`,
+        { t: token },
+      )
+      return (res?.customer?.paymentMethods ?? []).map((m: any) => ({
+        id: m.id,
+        isDefault: Boolean(m.isDefault),
+        isActive: Boolean(m.isActive),
+        type: m.type,
+        ...(m.card ? { card: {
+          brand: m.card.brand ?? null,
+          lastDigits: m.card.lastDigits ?? null,
+          expiryMonth: m.card.expiryMonth ?? null,
+          expiryYear: m.card.expiryYear ?? null,
+          name: m.card.name ?? null,
+        } } : {}),
+      }))
     },
     async orders(token, opts) {
       const res = await graphql<{ customer: any }>(
