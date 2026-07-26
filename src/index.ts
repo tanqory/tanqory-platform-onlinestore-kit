@@ -117,6 +117,7 @@ export type {
   CustomerAddressInput,
   CustomerPaymentMethod,
   Order,
+  OrderTransaction,
   OrderLineItem,
   AuthResult,
   MutationResult,

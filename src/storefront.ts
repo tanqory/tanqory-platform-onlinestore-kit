@@ -315,7 +315,21 @@ export interface Order {
   billingAddress?: CustomerAddress | null
   /** Fulfillments with tracking (Shopify `order.fulfillments`). */
   fulfillments?: Array<{ trackingCompany?: string | null; trackingInfo: Array<{ number?: string | null; url?: string | null }> }>
+  /** Payment transactions (Shopify `order.transactions`). */
+  transactions?: OrderTransaction[]
   lineItems: OrderLineItem[]
+}
+/** A payment transaction on an order (Shopify `order.transactions` / `transaction`). */
+export interface OrderTransaction {
+  id: string
+  /** AUTHORIZATION | CAPTURE | SALE | REFUND | VOID */
+  kind: string
+  /** PENDING | SUCCESS | FAILURE | ERROR */
+  status: string
+  amount: Money
+  gateway?: string | null
+  paymentMethod?: string | null
+  processedAt: string
 }
 /** A saved payment method on the customer account (Shopify `customer_payment_method`). */
 export interface CustomerPaymentMethod {
@@ -503,6 +517,7 @@ const ORDER_FIELDS = /* GraphQL */ `
     shippingAddress { id firstName lastName company address1 address2 city province country zip phone }
     billingAddress { id firstName lastName company address1 address2 city province country zip phone }
     fulfillments(first: 5) { trackingCompany trackingInfo { number url } }
+    transactions { id kind status amount { amount currencyCode } gateway paymentMethod processedAt }
     lineItems(first: 50) {
       nodes {
         title variantTitle quantity
@@ -619,6 +634,17 @@ function normalizeOrder(n: any): Order {
       ? { fulfillments: n.fulfillments.map((f: any) => ({
           trackingCompany: f.trackingCompany ?? null,
           trackingInfo: (f.trackingInfo ?? []).map((t: any) => ({ number: t.number ?? null, url: t.url ?? null })),
+        })) }
+      : {}),
+    ...(n.transactions?.length
+      ? { transactions: n.transactions.map((t: any) => ({
+          id: t.id,
+          kind: t.kind,
+          status: t.status,
+          amount: t.amount ?? ZERO,
+          gateway: t.gateway ?? null,
+          paymentMethod: t.paymentMethod ?? null,
+          processedAt: t.processedAt,
         })) }
       : {}),
     lineItems: (n.lineItems?.nodes ?? []).map((li: any) => ({
