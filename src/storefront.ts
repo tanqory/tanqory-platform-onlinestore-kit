@@ -284,6 +284,13 @@ export interface Customer {
   tags?: string[]
   defaultAddress?: CustomerAddress | null
   addresses: CustomerAddress[]
+  /** Store-credit balances (Shopify `store_credit_account`). */
+  storeCreditAccounts?: StoreCreditAccount[]
+}
+/** A customer store-credit account balance (Shopify `store_credit_account`). */
+export interface StoreCreditAccount {
+  id: string
+  balance: Money
 }
 export interface OrderLineItem {
   title: string
@@ -317,7 +324,19 @@ export interface Order {
   fulfillments?: Array<{ trackingCompany?: string | null; trackingInfo: Array<{ number?: string | null; url?: string | null }> }>
   /** Payment transactions (Shopify `order.transactions`). */
   transactions?: OrderTransaction[]
+  /** Gift cards issued by this order (Shopify `gift_card`). Code is masked to last 4. */
+  giftCards?: OrderGiftCard[]
   lineItems: OrderLineItem[]
+}
+/** A gift card issued by an order (Shopify `gift_card`). Full code is never exposed. */
+export interface OrderGiftCard {
+  id: string
+  /** Last 4 characters of the code (full code never returned). */
+  lastCharacters: string
+  balance: Money
+  initialValue: Money
+  enabled: boolean
+  expiresOn?: string | null
 }
 /** A payment transaction on an order (Shopify `order.transactions` / `transaction`). */
 export interface OrderTransaction {
@@ -502,6 +521,7 @@ const CUSTOMER_FIELDS = /* GraphQL */ `
     id email firstName lastName displayName phone acceptsMarketing numberOfOrders tags
     defaultAddress { ...AddressFields }
     addresses(first: 20) { nodes { ...AddressFields } }
+    storeCreditAccounts { id balance { amount currencyCode } }
   }
 `
 
@@ -518,6 +538,7 @@ const ORDER_FIELDS = /* GraphQL */ `
     billingAddress { id firstName lastName company address1 address2 city province country zip phone }
     fulfillments(first: 5) { trackingCompany trackingInfo { number url } }
     transactions { id kind status amount { amount currencyCode } gateway paymentMethod processedAt }
+    giftCards { id lastCharacters balance { amount currencyCode } initialValue { amount currencyCode } enabled expiresOn }
     lineItems(first: 50) {
       nodes {
         title variantTitle quantity
@@ -609,6 +630,12 @@ function normalizeCustomer(n: any): Customer {
     tags: n.tags ?? [],
     defaultAddress: n.defaultAddress ? normalizeAddress(n.defaultAddress) : null,
     addresses: (n.addresses?.nodes ?? []).map(normalizeAddress),
+    ...(n.storeCreditAccounts?.length
+      ? { storeCreditAccounts: n.storeCreditAccounts.map((a: any) => ({
+          id: a.id,
+          balance: a.balance ?? ZERO,
+        })) }
+      : {}),
   }
 }
 function normalizeOrder(n: any): Order {
@@ -645,6 +672,16 @@ function normalizeOrder(n: any): Order {
           gateway: t.gateway ?? null,
           paymentMethod: t.paymentMethod ?? null,
           processedAt: t.processedAt,
+        })) }
+      : {}),
+    ...(n.giftCards?.length
+      ? { giftCards: n.giftCards.map((g: any) => ({
+          id: g.id,
+          lastCharacters: g.lastCharacters ?? '',
+          balance: g.balance ?? ZERO,
+          initialValue: g.initialValue ?? ZERO,
+          enabled: Boolean(g.enabled),
+          expiresOn: g.expiresOn ?? null,
         })) }
       : {}),
     lineItems: (n.lineItems?.nodes ?? []).map((li: any) => ({

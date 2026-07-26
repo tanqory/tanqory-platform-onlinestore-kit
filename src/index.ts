@@ -118,6 +118,8 @@ export type {
   CustomerPaymentMethod,
   Order,
   OrderTransaction,
+  OrderGiftCard,
+  StoreCreditAccount,
   OrderLineItem,
   AuthResult,
   MutationResult,
