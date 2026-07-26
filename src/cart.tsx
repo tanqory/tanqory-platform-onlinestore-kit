@@ -51,6 +51,17 @@ export interface CartLine {
   lineSubtotal: Money
   /** Product handle for linking back to the PDP. */
   productHandle?: string
+  /** Custom line properties (Shopify `line_item.properties`). */
+  attributes?: Array<{ key: string; value?: string | null }>
+  /** Per-line discounts (Shopify `line_item.discount_allocations`). */
+  discountAllocations?: Array<{ title?: string | null; code?: string | null; amount: Money }>
+  /** Subscription plan chosen for this line (Shopify `line_item.selling_plan_allocation`). */
+  sellingPlanAllocation?: {
+    sellingPlanId: string
+    sellingPlanName: string
+    checkoutCharge?: Money | null
+    remainingBalance?: Money | null
+  } | null
 }
 
 /** A discount code applied to the cart (`applicable=false` when it didn't qualify). */
@@ -173,6 +184,17 @@ const CART_FRAGMENT = /* GraphQL */ `
       nodes {
         id
         quantity
+        attributes { key value }
+        discountAllocations {
+          ... on CartCodeDiscountAllocation { code discountedAmount { amount currencyCode } }
+          ... on CartAutomaticDiscountAllocation { title discountedAmount { amount currencyCode } }
+          ... on CartCustomDiscountAllocation { title discountedAmount { amount currencyCode } }
+        }
+        sellingPlanAllocation {
+          sellingPlan { id name }
+          checkoutChargeAmount { amount currencyCode }
+          remainingBalanceChargeAmount { amount currencyCode }
+        }
         cost {
           subtotalAmount { amount currencyCode }
           amountPerQuantity { amount currencyCode }
@@ -326,6 +348,18 @@ function normalizeCart(c: GqlCart): Omit<CartState, 'loading' | 'ready' | 'error
       price: n.cost.amountPerQuantity ?? m.price,
       lineSubtotal: n.cost.subtotalAmount ?? multiply(m.price, n.quantity),
       ...(m.product?.handle ? { productHandle: m.product.handle } : {}),
+      ...(n.attributes?.length ? { attributes: n.attributes.map((a: any) => ({ key: a.key, value: a.value ?? null })) } : {}),
+      ...(n.discountAllocations?.length
+        ? { discountAllocations: n.discountAllocations.map((d: any) => ({ title: d.title ?? null, code: d.code ?? null, amount: d.discountedAmount ?? ZERO_MONEY })) }
+        : {}),
+      ...(n.sellingPlanAllocation?.sellingPlan
+        ? { sellingPlanAllocation: {
+            sellingPlanId: n.sellingPlanAllocation.sellingPlan.id,
+            sellingPlanName: n.sellingPlanAllocation.sellingPlan.name,
+            checkoutCharge: n.sellingPlanAllocation.checkoutChargeAmount ?? null,
+            remainingBalance: n.sellingPlanAllocation.remainingBalanceChargeAmount ?? null,
+          } }
+        : {}),
     }
   })
   const subtotal = c.cost?.subtotalAmount ?? sumLines(lines)
