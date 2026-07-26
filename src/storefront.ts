@@ -274,6 +274,8 @@ export interface Customer {
   phone?: string | null
   acceptsMarketing: boolean
   numberOfOrders: number
+  /** Merchant-assigned customer tags (Shopify `customer.tags`). */
+  tags?: string[]
   defaultAddress?: CustomerAddress | null
   addresses: CustomerAddress[]
 }
@@ -446,7 +448,7 @@ const CUSTOMER_FIELDS = /* GraphQL */ `
     formatted(withName: true)
   }
   fragment CustomerFields on Customer {
-    id email firstName lastName displayName phone acceptsMarketing numberOfOrders
+    id email firstName lastName displayName phone acceptsMarketing numberOfOrders tags
     defaultAddress { ...AddressFields }
     addresses(first: 20) { nodes { ...AddressFields } }
   }
@@ -544,6 +546,7 @@ function normalizeCustomer(n: any): Customer {
     phone: n.phone ?? null,
     acceptsMarketing: Boolean(n.acceptsMarketing),
     numberOfOrders: Number(n.numberOfOrders ?? 0),
+    tags: n.tags ?? [],
     defaultAddress: n.defaultAddress ? normalizeAddress(n.defaultAddress) : null,
     addresses: (n.addresses?.nodes ?? []).map(normalizeAddress),
   }

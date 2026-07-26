@@ -124,6 +124,11 @@ export interface Product {
   vendor?: string | null
   productType?: string | null
   tags?: string[]
+  /** Publish/create timestamps (Shopify `product.published_at`/`created_at`). */
+  publishedAt?: string | null
+  createdAt?: string | null
+  /** Canonical storefront URL (Shopify `product.url`). */
+  onlineStoreUrl?: string | null
   /** Long description — only populated by `fetchProduct()` (PDP). */
   description?: string
   /** Image gallery — only after `fetchProduct()` (PDP). */
@@ -169,6 +174,8 @@ export interface Collection {
   templateSuffix?: string | null
   handle: string
   title: string
+  /** Collection body/description HTML (Shopify `collection.description`). */
+  description?: string | null
   /** Optional hero image; falls back to first product's featuredImage. */
   image?: { url?: string; altText?: string } | null
   products: Product[]
@@ -672,6 +679,9 @@ const PRODUCT_CARD_FIELDS = /* GraphQL */ `
     vendor
     productType
     tags
+    publishedAt
+    createdAt
+    onlineStoreUrl
     featuredImage { url altText width height }
     priceRange { minVariantPrice { amount currencyCode } }
     compareAtPriceRange { maxVariantPrice { amount currencyCode } }
@@ -701,6 +711,7 @@ const COLLECTIONS_QUERY = /* GraphQL */ `
       id
       handle
       title
+      description
       image { url altText width height }
       productsCount { count }
       templateSuffix
@@ -773,6 +784,7 @@ const SAFE_COLLECTIONS_QUERY = /* GraphQL */ `
       id
       handle
       title
+      description
       image { url altText width height }
       productsCount { count }
       templateSuffix
@@ -808,6 +820,9 @@ interface GqlProductNode {
   vendor?: string | null
   productType?: string | null
   tags?: string[]
+  publishedAt?: string | null
+  createdAt?: string | null
+  onlineStoreUrl?: string | null
   featuredImage?: GqlImg
   priceRange?: { minVariantPrice?: GqlMoney }
   compareAtPriceRange?: { maxVariantPrice?: GqlMoney } | null
@@ -819,6 +834,7 @@ interface GqlCollectionNode {
   id: string
   handle: string
   title: string
+  description?: string | null
   image?: GqlImg
   productsCount?: { count: number } | null
   products: { edges: Array<{ node: GqlProductNode }> }
@@ -883,6 +899,9 @@ function normalizeProduct(p: GqlProductNode): Product {
     ...(p.vendor ? { vendor: p.vendor } : {}),
     ...(p.productType ? { productType: p.productType } : {}),
     ...(p.tags?.length ? { tags: p.tags } : {}),
+    ...(p.publishedAt ? { publishedAt: p.publishedAt } : {}),
+    ...(p.createdAt ? { createdAt: p.createdAt } : {}),
+    ...(p.onlineStoreUrl ? { onlineStoreUrl: p.onlineStoreUrl } : {}),
     ...(p.firstAvailableVariant?.id ? { variantId: p.firstAvailableVariant.id } : {}),
     ...(typeof p.availableForSale === 'boolean' ? { availableForSale: p.availableForSale } : {}),
     ...(p.templateSuffix ? { templateSuffix: p.templateSuffix } : {}),
@@ -895,6 +914,7 @@ function normalizeCollection(c: GqlCollectionNode): Collection {
     ...(c.id ? { id: c.id } : {}),
     handle: c.handle,
     title: c.title,
+    ...(c.description ? { description: c.description } : {}),
     image: normalizeImage(c.image),
     ...(typeof c.productsCount?.count === 'number'
       ? { productsCount: c.productsCount.count }
