@@ -74,7 +74,16 @@ export type {
   SellingPlan,
   SellingPlanOption,
   SellingPlanGroup,
+  Measurement,
+  Rating,
+  FocalPoint,
+  ImagePresentation,
+  ModelSource,
+  VideoSource,
+  GenericFile,
+  Recommendations,
 } from './data'
+export { toRecommendations } from './data'
 export { jsxToJSON } from './jsx-to-json'
 export { tag, type Tag } from './composition'
 export type { Money, Product, Collection, DataApi } from './data'

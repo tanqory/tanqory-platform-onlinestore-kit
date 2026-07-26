@@ -36,6 +36,68 @@ export interface Seo {
   description?: string | null
   keywords?: string[] | null
 }
+
+// ─── Shopify object-parity shapes ────────────────────────────────────────────
+// Type-level parity for Shopify Liquid objects that map to metafield values /
+// media sources. Themes use these to type props + parse typed metafields; not
+// every one is populated by a loader yet (rating/measurement come from a
+// `rating`/`dimension` metafield the theme reads via `product.metafields`).
+
+/** Shopify `measurement` (a `dimension`/`volume`/`weight` metafield value). */
+export interface Measurement {
+  value: number
+  unit: string
+}
+/** Shopify `rating` metafield value. */
+export interface Rating {
+  value: number
+  scaleMin: number
+  scaleMax: number
+}
+/** Shopify `focal_point` — normalized 0..1 crop centre. */
+export interface FocalPoint {
+  x: number
+  y: number
+}
+/** Shopify `image_presentation`. */
+export interface ImagePresentation {
+  focalPoint?: FocalPoint | null
+}
+/** Shopify `model_source` (a 3D model file source). */
+export interface ModelSource {
+  url: string
+  format?: string | null
+  mimeType?: string | null
+  filesize?: number | null
+}
+/** Shopify `video_source` (one encoding of a hosted video). */
+export interface VideoSource {
+  url: string
+  format?: string | null
+  mimeType?: string | null
+  width?: number | null
+  height?: number | null
+}
+/** Shopify `generic_file` (a File reference from a metafield). */
+export interface GenericFile {
+  id?: string
+  url: string
+  previewImage?: ImageRef | null
+  mimeType?: string | null
+  originalFileSize?: number | null
+}
+/** Shopify `recommendations` object — wraps the `productRecommendations()` list. */
+export interface Recommendations {
+  products: Product[]
+  productsCount: number
+  intent?: 'related' | 'complementary' | string
+  performed?: boolean
+}
+/** Build a `recommendations` object from a product list (parity with Shopify's
+ *  `recommendations` Liquid object, whose `.products` our API returns directly). */
+export function toRecommendations(products: Product[], intent = 'related'): Recommendations {
+  return { products, productsCount: products.length, intent, performed: true }
+}
 /** Per-variant cart quantity bounds (wholesale / case-of-N). Storefront cart enforces these. */
 export interface QuantityRule {
   minimum: number
