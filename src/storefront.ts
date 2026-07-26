@@ -200,6 +200,9 @@ export interface ShopPolicy {
 export interface Shop {
   name: string
   description?: string | null
+  /** Store contact (Shopify `shop.email` / `shop.phone`). */
+  email?: string | null
+  phone?: string | null
   brand?: {
     logo?: Image | null
     squareLogo?: Image | null
@@ -579,6 +582,8 @@ function normalizeShop(n: any): Shop | null {
   return {
     name: n.name,
     description: n.description ?? null,
+    email: n.email ?? null,
+    phone: n.phone ?? null,
     brand: n.brand
       ? {
           logo: img(n.brand.logo),
@@ -646,6 +651,8 @@ export const BOOTSTRAP_SHOP_MENU = /* GraphQL */ `
   shop {
     name
     description
+    email
+    phone
     # Ask for the whole brand, not a third of it. Settings → Brand persists a
     # logo, a square logo and brand colours; the SDL has carried them all along
     # and this selection took only logo/slogan/shortDescription, so a merchant
