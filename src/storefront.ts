@@ -313,6 +313,8 @@ export interface Order {
   /** Shipping / billing address (Shopify `order.shipping_address`/`billing_address`). */
   shippingAddress?: CustomerAddress | null
   billingAddress?: CustomerAddress | null
+  /** Fulfillments with tracking (Shopify `order.fulfillments`). */
+  fulfillments?: Array<{ trackingCompany?: string | null; trackingInfo: Array<{ number?: string | null; url?: string | null }> }>
   lineItems: OrderLineItem[]
 }
 export interface CustomerAddressInput {
@@ -483,6 +485,7 @@ const ORDER_FIELDS = /* GraphQL */ `
     totalPrice { amount currencyCode }
     shippingAddress { id firstName lastName company address1 address2 city province country zip phone }
     billingAddress { id firstName lastName company address1 address2 city province country zip phone }
+    fulfillments(first: 5) { trackingCompany trackingInfo { number url } }
     lineItems(first: 50) {
       nodes {
         title variantTitle quantity
@@ -595,6 +598,12 @@ function normalizeOrder(n: any): Order {
     ...(n.totalShippingPrice ? { totalShippingPrice: n.totalShippingPrice } : {}),
     ...(n.shippingAddress ? { shippingAddress: normalizeAddress(n.shippingAddress) } : {}),
     ...(n.billingAddress ? { billingAddress: normalizeAddress(n.billingAddress) } : {}),
+    ...(n.fulfillments?.length
+      ? { fulfillments: n.fulfillments.map((f: any) => ({
+          trackingCompany: f.trackingCompany ?? null,
+          trackingInfo: (f.trackingInfo ?? []).map((t: any) => ({ number: t.number ?? null, url: t.url ?? null })),
+        })) }
+      : {}),
     lineItems: (n.lineItems?.nodes ?? []).map((li: any) => ({
       title: li.title,
       variantTitle: li.variantTitle ?? null,
