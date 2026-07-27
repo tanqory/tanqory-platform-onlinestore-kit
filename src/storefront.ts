@@ -3,8 +3,8 @@
  *
  * `data.tsx` boots a small homepage prefetch (collections + products + page +
  * localization) and exposes a raw `graphql()` escape hatch. This module layers
- * the REST of the Shopify-Storefront-compatible surface on top of that same
- * requester so a theme can build EVERY page Shopify themes build:
+ * the REST of the storefront-standard surface on top of that same
+ * requester so a theme can build every standard storefront page:
  *
  *   - Navigation menus (header/footer, recursive)
  *   - Blog + articles
@@ -20,7 +20,7 @@
  * detect (`data.search?.(...)`, `data.customer?.login(...)`).
  *
  * Token storage: the customer flow returns/accepts a `customerAccessToken`
- * (Shopify-compatible). The theme persists it (localStorage) and passes it
+ * (commerce-standard). The theme persists it (localStorage) and passes it
  * back — exactly like the cart's `cartId`. `customerTokenStore` is a tiny
  * localStorage helper for the common case.
  */
@@ -116,7 +116,7 @@ export interface Filter {
   id: string
   label: string
   type: string
-  /** How to render values (Shopify `filter.presentation`): TEXT | IMAGE | SWATCH. */
+  /** How to render values (`filter.presentation`): TEXT | IMAGE | SWATCH. */
   presentation?: string | null
   values: Array<{ id: string; label: string; count: number; input: string }>
 }
@@ -203,7 +203,7 @@ export interface ShopPolicy {
 export interface Shop {
   name: string
   description?: string | null
-  /** Store contact (Shopify `shop.email` / `shop.phone`). */
+  /** Store contact (standard `shop.email` / `shop.phone`). */
   email?: string | null
   phone?: string | null
   brand?: {
@@ -280,14 +280,14 @@ export interface Customer {
   phone?: string | null
   acceptsMarketing: boolean
   numberOfOrders: number
-  /** Merchant-assigned customer tags (Shopify `customer.tags`). */
+  /** Merchant-assigned customer tags (`customer.tags`). */
   tags?: string[]
   defaultAddress?: CustomerAddress | null
   addresses: CustomerAddress[]
-  /** Store-credit balances (Shopify `store_credit_account`). */
+  /** Store-credit balances (`store_credit_account`). */
   storeCreditAccounts?: StoreCreditAccount[]
 }
-/** A customer store-credit account balance (Shopify `store_credit_account`). */
+/** A customer store-credit account balance (`store_credit_account`). */
 export interface StoreCreditAccount {
   id: string
   balance: Money
@@ -308,27 +308,27 @@ export interface Order {
   fulfillmentStatus: string
   totalPrice: Money
   statusUrl: string
-  /** Contact + cancellation (Shopify `order.email`/`phone`/`cancelled`/`cancel_reason`). */
+  /** Contact + cancellation (standard `order.email`/`phone`/`cancelled`/`cancel_reason`). */
   email?: string | null
   phone?: string | null
   cancelled?: boolean
   cancelReason?: string | null
-  /** Price breakdown (Shopify `order.subtotal_price`/`tax_price`/`shipping_price`). */
+  /** Price breakdown (standard `order.subtotal_price`/`tax_price`/`shipping_price`). */
   subtotalPrice?: Money | null
   totalTax?: Money | null
   totalShippingPrice?: Money | null
-  /** Shipping / billing address (Shopify `order.shipping_address`/`billing_address`). */
+  /** Shipping / billing address (standard `order.shipping_address`/`billing_address`). */
   shippingAddress?: CustomerAddress | null
   billingAddress?: CustomerAddress | null
-  /** Fulfillments with tracking (Shopify `order.fulfillments`). */
+  /** Fulfillments with tracking (`order.fulfillments`). */
   fulfillments?: Array<{ trackingCompany?: string | null; trackingInfo: Array<{ number?: string | null; url?: string | null }> }>
-  /** Payment transactions (Shopify `order.transactions`). */
+  /** Payment transactions (`order.transactions`). */
   transactions?: OrderTransaction[]
-  /** Gift cards issued by this order (Shopify `gift_card`). Code is masked to last 4. */
+  /** Gift cards issued by this order (`gift_card`). Code is masked to last 4. */
   giftCards?: OrderGiftCard[]
   lineItems: OrderLineItem[]
 }
-/** A gift card issued by an order (Shopify `gift_card`). Full code is never exposed. */
+/** A gift card issued by an order (`gift_card`). Full code is never exposed. */
 export interface OrderGiftCard {
   id: string
   /** Last 4 characters of the code (full code never returned). */
@@ -338,7 +338,7 @@ export interface OrderGiftCard {
   enabled: boolean
   expiresOn?: string | null
 }
-/** A payment transaction on an order (Shopify `order.transactions` / `transaction`). */
+/** A payment transaction on an order (standard `order.transactions` / `transaction`). */
 export interface OrderTransaction {
   id: string
   /** AUTHORIZATION | CAPTURE | SALE | REFUND | VOID */
@@ -350,7 +350,7 @@ export interface OrderTransaction {
   paymentMethod?: string | null
   processedAt: string
 }
-/** A saved payment method on the customer account (Shopify `customer_payment_method`). */
+/** A saved payment method on the customer account (`customer_payment_method`). */
 export interface CustomerPaymentMethod {
   id: string
   isDefault: boolean
@@ -389,7 +389,7 @@ export interface MutationResult<T = void> {
   data?: T
 }
 
-/** Customer account flow — Shopify-compatible token model. Live-only. */
+/** Customer account flow — commerce-standard token model. Live-only. */
 export interface CustomerApi {
   /** Email + password → access token. Persist `token` (e.g. via customerTokenStore). */
   login(email: string, password: string): Promise<AuthResult>
@@ -410,7 +410,7 @@ export interface CustomerApi {
   get(token: string): Promise<Customer | null>
   /** Order history. */
   orders(token: string, opts?: { first?: number }): Promise<Order[]>
-  /** Saved payment methods (Shopify `customer.payment_methods`). */
+  /** Saved payment methods (`customer.payment_methods`). */
   paymentMethods(token: string): Promise<CustomerPaymentMethod[]>
   /** Guest order lookup — orderNumber + email (no account needed). */
   orderByLookup(orderNumber: string, email: string): Promise<Order | null>

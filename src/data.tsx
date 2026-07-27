@@ -24,10 +24,10 @@ export interface ProductOption {
 export interface ImageRef {
   url: string
   altText?: string
-  /** Intrinsic pixel dimensions (Shopify `image.width`/`image.height`). */
+  /** Intrinsic pixel dimensions (standard `image.width`/`image.height`). */
   width?: number | null
   height?: number | null
-  /** width / height (Shopify `image.aspect_ratio`) — for responsive layouts. */
+  /** width / height (`image.aspect_ratio`) — for responsive layouts. */
   aspectRatio?: number | null
 }
 /** SEO snapshot (Product/Page/Article). */
@@ -37,40 +37,40 @@ export interface Seo {
   keywords?: string[] | null
 }
 
-// ─── Shopify object-parity shapes ────────────────────────────────────────────
-// Type-level parity for Shopify Liquid objects that map to metafield values /
+// ─── Commerce object shapes ────────────────────────────────────────────
+// Type-level commerce object model that map to metafield values /
 // media sources. Themes use these to type props + parse typed metafields; not
 // every one is populated by a loader yet (rating/measurement come from a
 // `rating`/`dimension` metafield the theme reads via `product.metafields`).
 
-/** Shopify `measurement` (a `dimension`/`volume`/`weight` metafield value). */
+/** standard `measurement` (a `dimension`/`volume`/`weight` metafield value). */
 export interface Measurement {
   value: number
   unit: string
 }
-/** Shopify `rating` metafield value. */
+/** standard `rating` metafield value. */
 export interface Rating {
   value: number
   scaleMin: number
   scaleMax: number
 }
-/** Shopify `focal_point` — normalized 0..1 crop centre. */
+/** standard `focal_point` — normalized 0..1 crop centre. */
 export interface FocalPoint {
   x: number
   y: number
 }
-/** Shopify `image_presentation`. */
+/** standard `image_presentation`. */
 export interface ImagePresentation {
   focalPoint?: FocalPoint | null
 }
-/** Shopify `model_source` (a 3D model file source). */
+/** standard `model_source` (a 3D model file source). */
 export interface ModelSource {
   url: string
   format?: string | null
   mimeType?: string | null
   filesize?: number | null
 }
-/** Shopify `video_source` (one encoding of a hosted video). */
+/** standard `video_source` (one encoding of a hosted video). */
 export interface VideoSource {
   url: string
   format?: string | null
@@ -78,7 +78,7 @@ export interface VideoSource {
   width?: number | null
   height?: number | null
 }
-/** Shopify `generic_file` (a File reference from a metafield). */
+/** standard `generic_file` (a File reference from a metafield). */
 export interface GenericFile {
   id?: string
   url: string
@@ -86,15 +86,15 @@ export interface GenericFile {
   mimeType?: string | null
   originalFileSize?: number | null
 }
-/** Shopify `recommendations` object — wraps the `productRecommendations()` list. */
+/** standard `recommendations` object — wraps the `productRecommendations()` list. */
 export interface Recommendations {
   products: Product[]
   productsCount: number
   intent?: 'related' | 'complementary' | string
   performed?: boolean
 }
-/** Build a `recommendations` object from a product list (parity with Shopify's
- *  `recommendations` Liquid object, whose `.products` our API returns directly). */
+/** Build a `recommendations` object from a product list (parity with the commerce standard
+ *  `recommendations` legacy templating object, whose `.products` our API returns directly). */
 export function toRecommendations(products: Product[], intent = 'related'): Recommendations {
   return { products, productsCount: products.length, intent, performed: true }
 }
@@ -149,9 +149,9 @@ export interface ProductVariant {
   sku?: string | null
   /** Barcode (ISBN, UPC, GTIN…). Only after `fetchProduct()`. */
   barcode?: string | null
-  /** On-hand stock for this variant (Shopify `inventory_quantity`). */
+  /** On-hand stock for this variant (`inventory_quantity`). */
   inventoryQuantity?: number | null
-  /** `DENY` (stop selling at 0) or `CONTINUE` (oversell) — Shopify `inventory_policy`. */
+  /** `DENY` (stop selling at 0) or `CONTINUE` (oversell) — standard `inventory_policy`. */
   inventoryPolicy?: 'DENY' | 'CONTINUE' | null
   /** Whether the variant needs shipping (physical vs digital/service). */
   requiresShipping?: boolean | null
@@ -170,7 +170,7 @@ export interface ProductVariant {
 export interface Product {
   /** Storefront GraphQL node id (present for live data). */
   id?: string
-  /** Shopify-style theme template variant (e.g. "bundle"). */
+  /** commerce-standard theme template variant (e.g. "bundle"). */
   templateSuffix?: string | null
   handle: string
   title: string
@@ -186,16 +186,16 @@ export interface Product {
   vendor?: string | null
   productType?: string | null
   tags?: string[]
-  /** Publish/create timestamps (Shopify `product.published_at`/`created_at`). */
+  /** Publish/create timestamps (standard `product.published_at`/`created_at`). */
   publishedAt?: string | null
   createdAt?: string | null
-  /** Canonical storefront URL (Shopify `product.url`). */
+  /** Canonical storefront URL (`product.url`). */
   onlineStoreUrl?: string | null
   /** Long description — only populated by `fetchProduct()` (PDP). */
   description?: string
   /** Image gallery — only after `fetchProduct()` (PDP). */
   images?: ImageRef[]
-  /** Full media gallery incl. video / 3D (Shopify `product.media`) — after `fetchProduct()`. */
+  /** Full media gallery incl. video / 3D (`product.media`) — after `fetchProduct()`. */
   media?: ProductMedia[]
   /** Option definitions (Size, Color…) — only after `fetchProduct()`. */
   options?: ProductOption[]
@@ -203,11 +203,11 @@ export interface Product {
   variants?: ProductVariant[]
   /** Subscription / selling-plan groups — only after `fetchProduct()`. */
   sellingPlanGroups?: SellingPlanGroup[]
-  /** Collections this product belongs to (Shopify `product.collections`) — after `fetchProduct()`. */
+  /** Collections this product belongs to (`product.collections`) — after `fetchProduct()`. */
   collections?: Array<{ handle: string; title: string }>
-  /** True for gift-card products (Shopify `product.gift_card`) — after `fetchProduct()`. */
+  /** True for gift-card products (`product.gift_card`) — after `fetchProduct()`. */
   isGiftCard?: boolean
-  /** Total on-hand stock across variants (Shopify `product.totalInventory`). */
+  /** Total on-hand stock across variants (`product.totalInventory`). */
   totalInventory?: number | null
   /** Requested custom metafields ("namespace.key" → value) — pass identifiers to fetchProduct(). */
   metafields?: Record<string, string | null>
@@ -232,18 +232,18 @@ export interface ProductMedia {
 }
 
 export interface Collection {
-  /** Backend collection id (Shopify `collection.id`). */
+  /** Backend collection id (`collection.id`). */
   id?: string
-  /** Shopify-style theme template variant (e.g. "featured"). */
+  /** commerce-standard theme template variant (e.g. "featured"). */
   templateSuffix?: string | null
   handle: string
   title: string
-  /** Collection body/description HTML (Shopify `collection.description`). */
+  /** Collection body/description HTML (`collection.description`). */
   description?: string | null
   /** Optional hero image; falls back to first product's featuredImage. */
   image?: { url?: string; altText?: string } | null
   products: Product[]
-  /** Total number of products in the collection (Shopify `products_count`). */
+  /** Total number of products in the collection (`products_count`). */
   productsCount?: number
   /** Custom metafields ("namespace.key" → value) for dynamic sources. */
   metafields?: Record<string, string | null>
@@ -259,7 +259,7 @@ export interface Page {
   author?: string | null
   publishedAt?: string
   updatedAt?: string
-  /** Shopify-style template suffix (e.g. "contact"); the theme renders
+  /** commerce-standard template suffix (e.g. "contact"); the theme renders
    *  templates/page.<suffix>.json when set, else the default page template. */
   templateSuffix?: string | null
   /** SEO title/description (merchant-edited) for the document head. */
@@ -270,7 +270,7 @@ export interface Page {
  * The data interface every block consumes. Themes provide an implementation.
  *
  * Core read methods (collections/products/pages/localization) are always
- * present. The Shopify-compatible extensions (shop, menus, search, blog,
+ * present. The commerce-standard extensions (shop, menus, search, blog,
  * recommendations, metaobjects, customer account) come from `StorefrontExtensions`
  * and are LIVE-ONLY — undefined under mock data, so themes feature-detect them
  * (`data.search?.(...)`, `data.customer?.login(...)`).
@@ -475,7 +475,7 @@ export function createMockData(collections: Collection[]): DataApi {
     }
   }
 
-  // ── Offline fixtures so EVERY Shopify-parity object resolves in mock mode ──
+  // ── Offline fixtures so EVERY commerce-standard object resolves in mock mode ──
   // The live source (createLiveData) serves these from the Storefront GraphQL
   // API; mock mode must mirror the same shapes so a developer can build header
   // menus, blog, search, customer + shop sections fully offline (no store).
@@ -593,7 +593,7 @@ export function createMockData(collections: Collection[]): DataApi {
       ],
     },
 
-    // ── Shopify-parity extensions, served offline from the fixtures above so
+    // ── commerce-standard extensions, served offline from the fixtures above so
     //    themes built against `useData()` behave the same in mock + live. ──
     shop,
     menu: (handle) => menus.get(handle) ?? menus.get(decodeHandle(handle)) ?? null,
@@ -1474,7 +1474,7 @@ function buildLiveData(
     return toMfMap(res?.collection?.metafields)
   }
 
-  // ─── Shopify-compatible storefront extensions ───────────────────
+  // ─── commerce-standard storefront extensions ───────────────────
   // Shop info + the two standard menus came back in the bootstrap → expose
   // them synchronously (the layout's header/footer render at hydration).
   const { shop, menus } = readBootstrapShopMenu(boot)
@@ -1563,7 +1563,7 @@ const CURRENCY_FORMAT: Record<string, { symbol: string; decimals: number }> = {
 }
 
 /** The grouped numeric part of a Money, without symbol or code.
- *  `stripZeros` drops a `.00`-style fraction (Shopify `money_without_trailing_zeros`). */
+ *  `stripZeros` drops a `.00`-style fraction (`money_without_trailing_zeros`). */
 function moneyDigits(money: Money, stripZeros = false): string | null {
   const n = Number(money.amount)
   if (!Number.isFinite(n)) return null
@@ -1575,7 +1575,7 @@ function moneyDigits(money: Money, stripZeros = false): string | null {
   return `${n < 0 ? '-' : ''}${grouped}${frac ? `.${frac}` : ''}`
 }
 
-/** Shopify `money` — symbol + amount (e.g. "฿120.00"). */
+/** standard `money` — symbol + amount (e.g. "฿120.00"). */
 export function formatMoney(money: Money): string {
   const num = moneyDigits(money)
   if (num === null) return `${money.amount} ${money.currencyCode}`
@@ -1583,7 +1583,7 @@ export function formatMoney(money: Money): string {
   return info ? `${info.symbol}${num}` : `${num} ${money.currencyCode}`
 }
 
-/** Shopify `money_with_currency` — symbol + amount + ISO code (e.g. "฿120.00 THB"). */
+/** standard `money_with_currency` — symbol + amount + ISO code (e.g. "฿120.00 THB"). */
 export function formatMoneyWithCurrency(money: Money): string {
   const num = moneyDigits(money)
   if (num === null) return `${money.amount} ${money.currencyCode}`
@@ -1593,12 +1593,12 @@ export function formatMoneyWithCurrency(money: Money): string {
     : `${num} ${money.currencyCode}`
 }
 
-/** Shopify `money_without_currency` — bare grouped amount (e.g. "120.00"). */
+/** standard `money_without_currency` — bare grouped amount (e.g. "120.00"). */
 export function formatMoneyWithoutCurrency(money: Money): string {
   return moneyDigits(money) ?? `${money.amount}`
 }
 
-/** Shopify `money_without_trailing_zeros` — symbol + amount, dropping a `.00`
+/** standard `money_without_trailing_zeros` — symbol + amount, dropping a `.00`
  *  fraction (e.g. "฿120", but "฿120.50" stays). */
 export function formatMoneyWithoutTrailingZeros(money: Money): string {
   const num = moneyDigits(money, true)
@@ -1607,7 +1607,7 @@ export function formatMoneyWithoutTrailingZeros(money: Money): string {
   return info ? `${info.symbol}${num}` : `${num} ${money.currencyCode}`
 }
 
-/** Shopify `date` / `time_tag` — format an ISO date deterministically (identical
+/** standard `date` / `time_tag` — format an ISO date deterministically (identical
  *  output on server + client to keep SSR hydration stable). Defaults to a medium
  *  date; pass Intl options to customize. */
 export function formatDate(
@@ -1625,7 +1625,7 @@ export function formatDate(
   }
 }
 
-/** Shopify `weight_with_unit` — format a variant weight (e.g. "1.5 kg"). */
+/** standard `weight_with_unit` — format a variant weight (e.g. "1.5 kg"). */
 export function formatWeight(
   weight: { value: number; unit: string } | null | undefined,
 ): string {
@@ -1635,7 +1635,7 @@ export function formatWeight(
   return `${n} ${unit}`
 }
 
-/** Shopify `image_url` — append CDN transform params (width/height/crop) to an
+/** standard `image_url` — append CDN transform params (width/height/crop) to an
  *  image URL. No-op when the src is empty or no transform is requested. React
  *  themes render the `<img>` themselves, so there is no separate `image_tag`. */
 export function imageUrl(

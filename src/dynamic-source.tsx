@@ -1,6 +1,6 @@
 /**
  * Dynamic sources — bind a section/block setting to a live metafield, resource
- * property, or metaobject field (Shopify "Insert dynamic source", the ⛁ icon).
+ * property, or metaobject field (the commerce standard "Insert dynamic source", the ⛁ icon).
  *
  * A setting value is normally a primitive. When the merchant connects a dynamic
  * source the editor stores a `{ '@source': '<path>' }` object instead, and the
@@ -12,7 +12,7 @@
  *   product.title / shop.name              → a plain resource property
  *   metaobject:size:medium.label           → a metaobject field (type:handle.key)
  *
- * The path grammar mirrors Shopify so themes/docs are portable. Resolution is
+ * The path grammar follows the standard commerce object model.
  * synchronous against already-loaded resources — the provider is responsible
  * for loading the bound metafields (see `collectBoundIdentifiers`).
  */

@@ -12,7 +12,7 @@ import { useData, type Money } from './data'
 /**
  * Client-side shopping cart for storefront themes.
  *
- * Backed by the Tanqory Storefront GraphQL cart API (Shopify-compatible:
+ * Backed by the Tanqory Storefront GraphQL cart API (commerce-standard:
  * `cartCreate` / `cartLinesAdd` / `cartLinesUpdate` / `cartLinesRemove`,
  * merchandise = Variant). The cart id is persisted in localStorage so the
  * cart survives reloads; line data is always sourced from the backend (the
@@ -30,7 +30,7 @@ import { useData, type Money } from './data'
 
 const STORAGE_KEY = 'tq-cart-id'
 const DEFAULT_CURRENCY = 'USD'
-// Shopify-ism: single-variant products name their lone variant "Default Title".
+// commerce-standard: single-variant products name their lone variant "Default Title".
 // Hide it so single-variant lines don't show a meaningless variant subtitle.
 const DEFAULT_VARIANT_TITLE = 'Default Title'
 
@@ -51,11 +51,11 @@ export interface CartLine {
   lineSubtotal: Money
   /** Product handle for linking back to the PDP. */
   productHandle?: string
-  /** Custom line properties (Shopify `line_item.properties`). */
+  /** Custom line properties (`line_item.properties`). */
   attributes?: Array<{ key: string; value?: string | null }>
-  /** Per-line discounts (Shopify `line_item.discount_allocations`). */
+  /** Per-line discounts (`line_item.discount_allocations`). */
   discountAllocations?: Array<{ title?: string | null; code?: string | null; amount: Money }>
-  /** Subscription plan chosen for this line (Shopify `line_item.selling_plan_allocation`). */
+  /** Subscription plan chosen for this line (`line_item.selling_plan_allocation`). */
   sellingPlanAllocation?: {
     sellingPlanId: string
     sellingPlanName: string
@@ -87,9 +87,9 @@ export interface CartState {
   tax?: Money | null
   /** Estimated duties (cost.totalDutyAmount) — null unless cross-border. */
   duty?: Money | null
-  /** Cart-level order note (Shopify `cart.note`). */
+  /** Cart-level order note (`cart.note`). */
   note?: string | null
-  /** Cart-level custom attributes (Shopify `cart.attributes`). */
+  /** Cart-level custom attributes (`cart.attributes`). */
   attributes?: { key: string; value: string | null }[]
   totalQuantity: number
   checkoutUrl: string | null
@@ -130,9 +130,9 @@ export interface CartApi extends CartState {
   applyGiftCardCodes: (codes: string[]) => Promise<void>
   /** Remove applied gift cards by id. LIVE only. */
   removeGiftCards: (ids: string[]) => Promise<void>
-  /** Set the cart-level order note (Shopify `cart.note`). LIVE only. */
+  /** Set the cart-level order note (`cart.note`). LIVE only. */
   updateNote: (note: string) => Promise<void>
-  /** Replace the cart-level custom attributes (Shopify `cart.attributes`). LIVE only. */
+  /** Replace the cart-level custom attributes (`cart.attributes`). LIVE only. */
   updateAttributes: (attributes: { key: string; value: string }[]) => Promise<void>
 }
 

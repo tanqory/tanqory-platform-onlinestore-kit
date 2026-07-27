@@ -10,7 +10,7 @@
  * editor/preview plane) and calls `pageViewed()` on each route + the product/
  * cart/checkout emitters from the matching sections.
  *
- * CUSTOMER EVENTS (Shopify Web Pixels-style): every `track()` also publishes to
+ * CUSTOMER EVENTS (standard web-pixel): every `track()` also publishes to
  * a client-side bus so the merchant's CONNECTED pixels (Settings → Customer
  * events, injected by the theme's TrackingPixels) can react to live shopper
  * actions. A pixel subscribes with `window.tqAnalytics.subscribe(name, cb)`.
@@ -73,7 +73,7 @@ export interface AnalyticsOptions {
 
 const NOOP: Analytics = { track() {}, pageViewed() {}, flush() {}, subscribe: () => () => {} }
 
-// ── Customer-event bus (Shopify Web Pixels-style) ─────────────────────────────
+// ── Customer-event bus (standard web-pixel) ─────────────────────────────
 // Module-scoped so the injected `window.tqAnalytics.subscribe` and the active
 // analytics instance share one stream. Pixels load AFTER the first events fire,
 // so a small buffer replays recent events to late subscribers.
@@ -161,7 +161,7 @@ function persistentId(key: string): string {
   }
 }
 
-/** Rolling 30-minute session id (Shopify/GA-style). Refreshed on each event. */
+/** Rolling 30-minute session id (the commerce standard/GA-style). Refreshed on each event. */
 function sessionId(): string {
   const now = Date.now()
   try {
