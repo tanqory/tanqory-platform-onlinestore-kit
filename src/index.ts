@@ -89,7 +89,7 @@ export { tag, type Tag } from './composition'
 export type { Money, Product, Collection, DataApi } from './data'
 export type { SectionDef, SectionProps, ContentNode, PageDoc, AttrSpec } from './types'
 
-// Shopify-compatible storefront extensions (live data layer): navigation menus,
+// commerce-standard storefront extensions (live data layer): navigation menus,
 // blog/articles, search, recommendations, metaobjects, shop/policies, and the
 // full customer account flow. See storefront.ts.
 export { customerTokenStore } from './storefront'

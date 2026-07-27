@@ -51,7 +51,7 @@ export function PreviewBridge({
   const treeRef = useRef<ContentNode[]>(tree)
   useEffect(() => { treeRef.current = tree }, [tree])
 
-  // Write-through (lovable-style): on every content change, push the current
+  // Write-through (write-through): on every content change, push the current
   // content to the editor host so it persists the draft immediately — no
   // explicit "save". `firstRender` skips the initial mount so we don't re-save
   // the just-loaded draft. The host debounces.
@@ -102,7 +102,7 @@ export function PreviewBridge({
         const id = e.data.sectionId as string
         setTree((t) => { const i = t.findIndex((n) => n.id === id); setSelected(i >= 0 ? [i] : null); return t })
         // Scroll the canvas to the clicked section (editor tree → preview, like
-        // Shopify). The section wrapper is `display:contents` (no layout box), so
+        // the commerce standard). The section wrapper is `display:contents` (no layout box), so
         // scroll its first real child element into view instead.
         if (typeof document !== 'undefined' && id) {
           const sel = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id

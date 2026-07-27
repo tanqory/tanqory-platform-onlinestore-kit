@@ -50,7 +50,7 @@ export function renderStorefrontHTML(opts: MountOptions): string {
 /**
  * Render ONE section to an HTML string for the editor's "Add section" preview —
  * no Shell/layout, no page routing, no client SPA boot. This is the fast path
- * (Shopify-style): the runtime server-renders just the requested section with
+ * (commerce-standard): the runtime server-renders just the requested section with
  * the theme's providers + data and returns instant HTML. Block-composed sections
  * are seeded with their preset blocks so they aren't empty.
  */

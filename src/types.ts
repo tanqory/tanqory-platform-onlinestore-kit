@@ -13,7 +13,7 @@ export interface AttrSpec {
     | 'radio'
     | 'richtext'
     | 'html'
-    // A left/center/right choice (Shopify `text_alignment`).
+    // A left/center/right choice (`text_alignment`).
     | 'text_alignment'
     // A range slider (min/max/step).
     | 'range'
@@ -42,7 +42,7 @@ export interface AttrSpec {
   /** Placeholder / helper text shown in the editor control. */
   placeholder?: string
   info?: string
-  /** Conditional visibility (Shopify-style), e.g. `"{{ section.settings.x == 'y' }}"`. */
+  /** Conditional visibility (commerce-standard), e.g. `"{{ section.settings.x == 'y' }}"`. */
   visible_if?: string
   /** For type 'select'/'radio' — the editor renders these as options. */
   options?: { value: string; label: string }[]
