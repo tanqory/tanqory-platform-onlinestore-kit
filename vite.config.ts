@@ -5,10 +5,19 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   build: {
     target: 'es2021',
-    // Two entries: client API (index) + SSG render (ssg, uses react-dom/server).
+    // Four entries:
+    //   index    — client API
+    //   ssg      — SSG render (uses react-dom/server)
+    //   app      — the storefront application layer (@tanqory/theme-kit/app)
+    //   app-ssg  — its server-side factories (@tanqory/theme-kit/app/ssg)
     // Separate so themes never bundle react-dom/server into the client.
     lib: {
-      entry: { index: 'src/index.ts', ssg: 'src/ssg.tsx' },
+      entry: {
+        index: 'src/index.ts',
+        ssg: 'src/ssg.tsx',
+        app: 'src/app/index.ts',
+        'app-ssg': 'src/app/ssg.ts',
+      },
       formats: ['es'],
     },
     rollupOptions: {
