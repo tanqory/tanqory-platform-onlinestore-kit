@@ -1,8 +1,8 @@
 {
   "name": "@tanqory/theme-kit",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "type": "module",
-  "description": "Framework for Tanqory React themes — block registry, JSON-tree renderer, data layer, mount(). Themes depend on this and only author blocks/ + pages/.",
+  "description": "Framework for Tanqory React themes — block registry, JSON-tree renderer, data layer, mount(), plus the storefront application layer (/app) themes used to copy-paste. Themes author sections/ + templates/ + styles only.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tanqory/tanqory-platform-onlinestore-kit.git"
@@ -16,6 +16,9 @@
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/types/index.d.ts",
+  "bin": {
+    "tanqory-gen-manifest": "./dist/gen-manifest.mjs"
+  },
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
@@ -24,10 +27,25 @@
     "./ssg": {
       "types": "./dist/types/ssg.d.ts",
       "default": "./dist/ssg.js"
-    }
+    },
+    "./app": {
+      "types": "./dist/types/app/index.d.ts",
+      "default": "./dist/app.js"
+    },
+    "./app/ssg": {
+      "types": "./dist/types/app/ssg.d.ts",
+      "default": "./dist/app-ssg.js"
+    },
+    "./vite-preset": {
+      "types": "./dist/vite-preset.d.ts",
+      "default": "./dist/vite-preset.mjs"
+    },
+    "./gen-manifest": "./dist/gen-manifest.mjs",
+    "./tokens.css": "./dist/tokens.css",
+    "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "vite build && tsc -p tsconfig.json --emitDeclarationOnly --declaration --outDir dist/types",
+    "build": "vite build && tsc -p tsconfig.json --emitDeclarationOnly --declaration --outDir dist/types && node scripts/copy-assets.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {

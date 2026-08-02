@@ -1,0 +1,208 @@
+/* ============================================================================
+ * Design tokens — nova
+ * Tanqory design tokens: clean, content-forward,
+ * editorial typography, generous whitespace, subtle motion.
+ *
+ * Token layers (all CSS custom properties — themable per page if needed):
+ *   1. Color scheme        (semantic: bg, fg, accent, border, scrim, …)
+ *   2. Typography           (serif display + sans body, modular scale)
+ *   3. Space + sizing       (8-pt grid; container max-widths; gap scale)
+ *   4. Radius + shadow      (subtle, content-respecting)
+ *   5. Motion               (ease curves, durations)
+ *   6. Layer (z-index)
+ * ============================================================================ */
+
+:root {
+  /* ── Brand color (single accent; flip per-collection if desired) ───────── */
+  --color-brand: #111111;
+  --color-brand-contrast: #ffffff;
+  --color-accent: #1f6feb;
+
+  /* ── Surface (foreground / background pairs — light scheme by default) ── */
+  --color-fg: #0a0a0a;
+  --color-fg-muted: #51545a;
+  --color-fg-subtle: #8a8d93;
+  --color-fg-inverse: #ffffff;
+
+  --color-bg: #ffffff;
+  --color-bg-alt: #fafaf8;          /* off-white sections */
+  --color-bg-muted: #f3f3f0;         /* card surfaces */
+  --color-bg-elevated: #ffffff;
+  --color-bg-inverse: #0a0a0a;
+
+  --color-border: rgba(10, 10, 10, 0.10);
+  --color-border-strong: rgba(10, 10, 10, 0.18);
+  --color-border-inverse: rgba(255, 255, 255, 0.16);
+
+  --color-overlay-scrim: rgba(10, 10, 10, 0.55);
+  --color-overlay-gradient: linear-gradient(
+    180deg,
+    rgba(10, 10, 10, 0.10) 0%,
+    rgba(10, 10, 10, 0.65) 100%
+  );
+
+  --color-success: #1c7c54;
+  --color-warning: #b87900;
+  --color-danger:  #c0392b;
+
+  /* ── Typography — display serif + body sans (system-stack, swappable) ── */
+  --font-display:
+    'Editorial New', 'Times New Roman', Times, 'PT Serif', Georgia, serif;
+  --font-body:
+    'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+  --font-mono:
+    ui-monospace, 'SF Mono', 'JetBrains Mono', 'Roboto Mono', Menlo, monospace;
+
+  /* Modular scale — 1.250 (major third), generous on desktop */
+  --type-step--2: clamp(0.75rem,  0.74rem + 0.05vw, 0.78rem);
+  --type-step--1: clamp(0.875rem, 0.85rem + 0.10vw, 0.92rem);
+  --type-step-0:  clamp(1rem,     0.98rem + 0.12vw, 1.08rem);
+  --type-step-1:  clamp(1.125rem, 1.08rem + 0.20vw, 1.25rem);
+  --type-step-2:  clamp(1.375rem, 1.25rem + 0.50vw, 1.625rem);
+  --type-step-3:  clamp(1.75rem,  1.55rem + 0.90vw, 2.25rem);
+  --type-step-4:  clamp(2.25rem,  1.85rem + 1.80vw, 3.25rem);
+  --type-step-5:  clamp(2.75rem,  2.20rem + 2.50vw, 4.50rem);
+  --type-step-6:  clamp(3.5rem,   2.60rem + 4.00vw, 6.50rem);
+
+  --leading-tight: 1.08;
+  --leading-snug:  1.20;
+  --leading-base:  1.55;
+  --leading-loose: 1.75;
+
+  --tracking-tight: -0.03em;
+  --tracking-snug:  -0.01em;
+  --tracking-base:   0;
+  --tracking-wide:   0.02em;
+  --tracking-loose:  0.06em;
+
+  /* ── Space — 8-pt grid; named slots for common rhythm ──────────────── */
+  --space-0:  0;
+  --space-1:  0.25rem;   /*  4px */
+  --space-2:  0.5rem;    /*  8px */
+  --space-3:  0.75rem;   /* 12px */
+  --space-4:  1rem;      /* 16px */
+  --space-5:  1.5rem;    /* 24px */
+  --space-6:  2rem;      /* 32px */
+  --space-7:  3rem;      /* 48px */
+  --space-8:  4rem;      /* 64px */
+  --space-9:  6rem;      /* 96px */
+  --space-10: 8rem;      /* 128px */
+  --space-11: 12rem;     /* 192px */
+
+  /* Section vertical rhythm (consistent breath across sections) */
+  --section-pad-y: clamp(3.5rem, 3rem + 2vw, 6rem);
+  --section-pad-x: clamp(1.25rem, 1rem + 1.5vw, 2rem);
+
+  /* ── Container widths ─────────────────────────────────────────────── */
+  --container-sm:  640px;
+  --container-md:  840px;
+  --container-lg:  1100px;
+  --container-xl:  1320px;
+  --container-2xl: 1480px;
+  --container-prose: 70ch;
+
+  /* ── Radius — restrained ───────────────────────────────────────────── */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+  --radius-circle: 50%;
+
+  /* ── Shadows — soft ─────────────────────────────────── */
+  --shadow-xs:  0 1px 2px rgba(10, 10, 10, 0.04);
+  --shadow-sm:  0 2px 4px rgba(10, 10, 10, 0.04), 0 1px 2px rgba(10, 10, 10, 0.04);
+  --shadow-md:  0 6px 14px rgba(10, 10, 10, 0.06), 0 2px 4px rgba(10, 10, 10, 0.04);
+  --shadow-lg:  0 14px 28px rgba(10, 10, 10, 0.08), 0 4px 8px rgba(10, 10, 10, 0.04);
+  --shadow-xl:  0 24px 48px rgba(10, 10, 10, 0.12), 0 8px 16px rgba(10, 10, 10, 0.06);
+  --shadow-ring: 0 0 0 1px var(--color-border);
+
+  /* ── Motion ─────────────────────────────────────────────────────── */
+  --ease-standard:    cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-emphasized:  cubic-bezier(0.2, 0, 0, 1);
+  --ease-decelerate:  cubic-bezier(0, 0, 0.2, 1);
+  --ease-accelerate:  cubic-bezier(0.4, 0, 1, 1);
+
+  --duration-fast:    150ms;
+  --duration-base:    250ms;
+  --duration-slow:    400ms;
+  --duration-slower:  600ms;
+
+  /* ── Layer (z-index ladder) ─────────────────────────────────────── */
+  --z-base: 0;
+  --z-raised: 1;
+  --z-sticky: 10;
+  --z-header: 50;
+  --z-overlay: 90;
+  --z-modal: 100;
+  --z-toast: 110;
+  --z-popover: 120;
+
+  /* ── Component-level (refers to primitives above) ───────────────── */
+  --btn-radius: var(--radius-pill);
+  --btn-pad-y: 0.85rem;
+  --btn-pad-x: 1.5rem;
+  --btn-font-weight: 500;
+
+  --input-radius: var(--radius-sm);
+  --input-pad-y: 0.85rem;
+  --input-pad-x: 1rem;
+  --input-border: 1px solid var(--color-border-strong);
+
+  --card-radius: var(--radius-lg);
+  --card-pad: var(--space-5);
+}
+
+/* ── Dark scheme ─────────────────────────────────────────────────── */
+[data-scheme='dark'] {
+  --color-fg: #f5f5f4;
+  --color-fg-muted: #b6b9c0;
+  --color-fg-subtle: #888c94;
+  --color-fg-inverse: #0a0a0a;
+
+  --color-bg: #0c0c0d;
+  --color-bg-alt: #131316;
+  --color-bg-muted: #1c1c1f;
+  --color-bg-elevated: #18181b;
+  --color-bg-inverse: #ffffff;
+
+  --color-border: rgba(255, 255, 255, 0.12);
+  --color-border-strong: rgba(255, 255, 255, 0.20);
+  --color-border-inverse: rgba(10, 10, 10, 0.20);
+
+  --color-overlay-scrim: rgba(0, 0, 0, 0.65);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-scheme]) {
+    --color-fg: #f5f5f4;
+    --color-fg-muted: #b6b9c0;
+    --color-fg-subtle: #888c94;
+    --color-fg-inverse: #0a0a0a;
+
+    --color-bg: #0c0c0d;
+    --color-bg-alt: #131316;
+    --color-bg-muted: #1c1c1f;
+    --color-bg-elevated: #18181b;
+    --color-bg-inverse: #ffffff;
+
+    --color-border: rgba(255, 255, 255, 0.12);
+    --color-border-strong: rgba(255, 255, 255, 0.20);
+    --color-border-inverse: rgba(10, 10, 10, 0.20);
+
+    --color-overlay-scrim: rgba(0, 0, 0, 0.65);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
