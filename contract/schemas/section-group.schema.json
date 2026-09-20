@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.tanqory.com/theme-contract/v1/section-group.schema.json",
+  "title": "SectionGroupDoc",
+  "description": "A shared header or footer as stored at groups/<name>.json — the single source of truth every template binding it renders.",
+  "type": "object",
+  "required": [
+    "type",
+    "sections"
+  ],
+  "properties": {
+    "type": {
+      "enum": [
+        "header",
+        "footer"
+      ]
+    },
+    "name": {
+      "type": "string"
+    },
+    "contentVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "$ref": "content-node.schema.json"
+      }
+    }
+  }
+}

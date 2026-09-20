@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.tanqory.com/theme-contract/v1/section-def.schema.json",
+  "title": "SectionContract",
+  "description": "The serialisable half of defineSection() — everything but `component`.",
+  "type": "object",
+  "required": [
+    "name",
+    "title",
+    "attributes"
+  ],
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "icon": {
+      "type": "string"
+    },
+    "attributes": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "attr-spec.schema.json"
+      }
+    },
+    "allowedBlocks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "requiresContext": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "product",
+          "collection",
+          "page",
+          "blog",
+          "article",
+          "cart",
+          "search"
+        ]
+      }
+    },
+    "role": {
+      "enum": [
+        "section",
+        "block",
+        "layout"
+      ],
+      "description": "section | block | layout. Absent = derived from category/area/name."
+    },
+    "area": {
+      "enum": [
+        "header",
+        "template",
+        "footer"
+      ],
+      "description": "Default slot for a layout section."
+    },
+    "placement": {
+      "type": "object",
+      "properties": {
+        "areas": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "header",
+              "template",
+              "footer"
+            ]
+          }
+        },
+        "templates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "parents": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "presets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "settings": {
+            "type": "object"
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.tanqory.com/theme-contract/v1/page-doc.schema.json",
+  "title": "PageDoc",
+  "description": "A template document as stored at templates/<slug>.json.",
+  "type": "object",
+  "required": [
+    "sections"
+  ],
+  "properties": {
+    "contentVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "groups": {
+      "type": "object",
+      "description": "Content version 2: how each shared slot is filled. Absent = the inline header/footer sections in `sections` (version 1).",
+      "properties": {
+        "header": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+              "description": "Shared group name (groups/<name>.json)."
+            },
+            {
+              "type": "object",
+              "required": [
+                "ref"
+              ],
+              "properties": {
+                "ref": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "override"
+              ],
+              "properties": {
+                "override": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "content-node.schema.json"
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "description": "A page-specific composition; the shared group is not rendered on this page."
+            }
+          ]
+        },
+        "footer": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+              "description": "Shared group name (groups/<name>.json)."
+            },
+            {
+              "type": "object",
+              "required": [
+                "ref"
+              ],
+              "properties": {
+                "ref": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": [
+                "override"
+              ],
+              "properties": {
+                "override": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "content-node.schema.json"
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "description": "A page-specific composition; the shared group is not rendered on this page."
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "sections": {
+      "type": "array",
+      "items": {
+        "$ref": "content-node.schema.json"
+      }
+    }
+  }
+}

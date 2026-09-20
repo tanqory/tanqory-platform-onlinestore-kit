@@ -192,6 +192,55 @@ A page is an ordered list of section instances and their settings:
 
 The editor renders/re-orders these; `type` must match a section's `name`.
 
+#### Shared header & footer — `groups/*.json` (content version 2)
+
+The header and footer are **section groups**: one document per group, bound by
+every template that shows it. Editing the shared header once changes every
+page that binds it; a page that must look different keeps an explicit
+`override`. Nothing is merged silently.
+
+```
+groups/header.json          { "type": "header", "sections": [ { "type": "header", "id": "header", "settings": {} } ] }
+groups/footer.json          { "type": "footer", "sections": [ … ] }
+templates/product.json      { "contentVersion": 2, "groups": { "header": "header", "footer": "footer" }, "sections": [ … ] }
+templates/index.json        { "contentVersion": 2,
+                              "groups": { "header": { "override": [ { "type": "announcement-bar", … }, { "type": "header", … } ] },
+                                          "footer": "footer" },
+                              "sections": [ … ] }
+```
+
+A slot value is a group name (`"header"`), `{ "ref": "<name>" }`, or
+`{ "override": [ …nodes ] }`. A template with no `groups` key (content version
+1) still renders: its inline `area: 'header' | 'footer'` nodes are treated as a
+per-page copy, so every existing theme keeps working.
+
+One resolver, everywhere. `resolvePage(template, groups)` in
+`@tanqory/theme-kit/contract` flattens a page into `[header…, body…, footer…]`
+with the provenance of every node; the runtime (`mount`, `ssg`, the theme's
+router via `resolvePageSections`), studio-api's editor routes, the Studio
+editor and the AI agent all call it — there is no second implementation of
+"which header does this page show". `splitPage` is its inverse for saving: an
+edit to a node whose provenance is a group writes the group; an override never
+does.
+
+Migrating a theme: `extractGroups(templates, { defaults })` finds the
+header/footer copy most templates share, binds them, and reports every
+template whose copy differs (kept as an override, never merged). It is
+idempotent — Nova's `scripts/migrate-groups.mjs --check` is that call, run in
+CI. Wire the runtime with:
+
+```ts
+mount({ sections, templates, groups: import.meta.glob('./groups/*.json', { eager: true }), … })
+```
+
+Every section also declares its **role** (`layout` for header/footer chrome,
+`section` for a page unit, `block` for a unit that lives inside a section), an
+optional `area` (`header` | `footer`) and `requiresContext` (`['product']`,
+`['collection']`, …). The validator uses them: a block cannot sit at the top
+level, a layout unit cannot be nested, and a section that needs product
+context is refused on a template that does not provide it. Category is a
+picker label, never a placement rule.
+
 ### ⑤ Layout — `layouts/layout.tsx`
 
 The shell wrapping every page (header, nav, footer):

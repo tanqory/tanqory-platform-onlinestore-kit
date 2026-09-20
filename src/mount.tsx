@@ -8,7 +8,8 @@ import { CartProvider } from './cart'
 import { ThemeProvider } from './theme-context'
 import { Editor } from './editor'
 import { PreviewBridge } from './preview-bridge'
-import type { SectionDef, PageDoc, ContentNode } from './types'
+import type { SectionDef, PageDoc, ContentNode, SectionGroupDoc } from './types'
+import { resolvePage, type GroupMap } from './contract/groups'
 
 // Vite's import.meta.glob(..., { eager: true }) types each value as `unknown`,
 // so the theme entry passes plain glob maps with no generics. We narrow here.
@@ -21,6 +22,12 @@ export interface MountOptions {
   pages: GlobMap
   /** import.meta.glob('./layouts/*.tsx', { eager: true }) — optional. */
   shell?: GlobMap
+  /**
+   * import.meta.glob('./groups/*.json', { eager: true }) — the shared
+   * header/footer groups a template may bind. Optional: a theme with no
+   * `groups/` renders its templates' inline header/footer exactly as before.
+   */
+  groups?: GlobMap
   /** Data source the theme provides (createMockData(...) or a live client). */
   data: DataApi
   /** Global settings values (config/settings.json). */
@@ -59,6 +66,26 @@ function pickByName<T>(map: GlobMap, name: string): T | undefined {
   return hit ? (hit[1] as { default: T }).default : undefined
 }
 
+/** `groups/<name>.json` glob → name-keyed map for `resolvePage`. */
+export function groupsFromGlob(map?: GlobMap): GroupMap {
+  const out: GroupMap = {}
+  for (const [key, mod] of Object.entries(map ?? {})) {
+    const name = key.replace(/^.*\//, '').replace(/\.json$/, '')
+    const doc = (mod as { default?: SectionGroupDoc }).default
+    if (doc) out[name] = doc
+  }
+  return out
+}
+
+/**
+ * The section list a template renders — header group, body, footer group —
+ * through the ONE resolver the editor and the AI tools also use.
+ */
+export function resolvePageSections(doc: PageDoc | undefined, groups: GroupMap): ContentNode[] {
+  if (!doc) return []
+  return resolvePage(doc as Parameters<typeof resolvePage>[0], groups).sections as ContentNode[]
+}
+
 /**
  * Boot a theme. The theme's entry passes its globbed sections/templates/layouts
  * (so Vite resolves them relative to the theme) plus a data source. Everything
@@ -70,7 +97,9 @@ export function mount(opts: MountOptions): void {
   const shells = opts.shell ? defaultsOf<FC<{ children: ReactNode }>>(opts.shell) : []
   const Shell: FC<{ children: ReactNode }> = shells[0] ?? (({ children }) => <>{children}</>)
 
+  const groups = groupsFromGlob(opts.groups)
   const pageDoc = pickByName<PageDoc>(opts.pages, opts.page ?? 'index') ?? { sections: [] }
+  const pageSections = resolvePageSections(pageDoc, groups)
   const rootEl = document.getElementById(opts.rootId ?? 'root')
   if (!rootEl) throw new Error('[tanqory] mount target not found')
 
@@ -92,7 +121,7 @@ export function mount(opts: MountOptions): void {
   const pagesByName: Record<string, ContentNode[]> = {}
   for (const [key, mod] of Object.entries(opts.pages)) {
     const name = key.replace(/^.*\//, '').replace(/\.json$/, '')
-    pagesByName[name] = (mod as { default?: PageDoc }).default?.sections ?? []
+    pagesByName[name] = resolvePageSections((mod as { default?: PageDoc }).default, groups)
   }
 
   const content = previewMode ? (
@@ -101,7 +130,7 @@ export function mount(opts: MountOptions): void {
     <Editor pages={pagesByName} initialPage={opts.page ?? 'index'} />
   ) : (
     <Shell>
-      <SectionTree tree={pageDoc.sections} />
+      <SectionTree tree={pageSections} />
     </Shell>
   )
 
