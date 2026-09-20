@@ -209,6 +209,9 @@ export interface Shop {
   brand?: {
     logo?: Image | null
     squareLogo?: Image | null
+    /** Settings → Brand share banner (`Brand.coverImage`) — the merchant's
+     *  purpose-built og:image. */
+    coverImage?: Image | null
     slogan?: string | null
     shortDescription?: string | null
     /** Settings → Brand. `primary[0]` is the brand colour; themes should treat
@@ -218,6 +221,10 @@ export interface Shop {
       primary: { background?: string | null; foreground?: string | null }[]
       secondary: { background?: string | null; foreground?: string | null }[]
     } | null
+    /** Settings → Brand fonts (`Brand.fonts: [String!]!`), family names in
+     *  priority order — e.g. `["Playfair Display", "Inter"]`. Themes map
+     *  `[0]` → display and `[1]` → body. An unconfigured store returns `[]`. */
+    fonts?: string[] | null
   } | null
   /** Custom shop metafields ("namespace.key" → value) for dynamic sources. */
   metafields?: Record<string, string | null>
@@ -708,8 +715,15 @@ function normalizeShop(n: any): Shop | null {
       ? {
           logo: img(n.brand.logo),
           squareLogo: img(n.brand.squareLogo),
+          coverImage: img(n.brand.coverImage),
           slogan: n.brand.slogan ?? null,
           shortDescription: n.brand.shortDescription ?? null,
+          // `fonts` is non-null in the SDL but a snapshot rebuilt from an older
+          // bootstrap won't carry it — normalise to [] so a theme can map over
+          // it without guarding.
+          fonts: Array.isArray(n.brand.fonts)
+            ? n.brand.fonts.filter((f: unknown): f is string => typeof f === 'string' && f.trim() !== '')
+            : [],
           // Colour groups arrive as arrays and can be empty; keep the shape
           // stable so a theme can index `primary[0]` without guarding twice.
           colors: n.brand.colors
@@ -782,12 +796,17 @@ export const BOOTSTRAP_SHOP_MENU = /* GraphQL */ `
     brand {
       logo { url altText width height }
       squareLogo { url altText width height }
+      coverImage { url altText width height }
       slogan
       shortDescription
       colors {
         primary { background foreground }
         secondary { background foreground }
       }
+      # Settings → Brand typography. Selected here because a theme cannot fetch
+      # it separately without a second bootstrap round-trip, and without it a
+      # merchant who picks brand fonts sees no change on their storefront.
+      fonts
     }
     privacyPolicy { handle title url }
     refundPolicy { handle title url }
