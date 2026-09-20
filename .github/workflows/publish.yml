@@ -30,10 +30,36 @@ jobs:
       - name: Install deps
         run: pnpm install --no-frozen-lockfile --ignore-scripts
 
-      - name: Build (vite + d.ts)
-        run: pnpm build
+      # The same gate a local `pnpm publish` runs through prepublishOnly:
+      # typecheck, build (vite + contract + d.ts), contract:check, tests.
+      - name: Verify
+        run: pnpm verify
 
+      # A prerelease (0.2.0-rc.1, 1.0.0-beta.2, …) must never become `latest`:
+      # plain `npm publish` tags whatever it sends as `latest`, so anyone running
+      # `pnpm add @tanqory/theme-kit` would get the release candidate. The
+      # dist-tag is the prerelease identifier (rc, beta, …); a stable version
+      # keeps `latest`.
+      - name: Pick the dist-tag
+        id: tag
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          case "$VERSION" in
+            *-*) TAG=$(printf '%s' "$VERSION" | sed -E 's/^[^-]+-([A-Za-z]+).*/\1/') ;;
+            *)   TAG=latest ;;
+          esac
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Publishing $VERSION with dist-tag $TAG"
+
+      # Re-running the workflow for a version that is already on the registry
+      # (published by hand, or a re-pushed tag) is a no-op, not a red build.
       - name: Publish to GitHub Packages
-        run: npm publish
+        run: |
+          if npm view "@tanqory/theme-kit@${{ steps.tag.outputs.version }}" version >/dev/null 2>&1; then
+            echo "@tanqory/theme-kit@${{ steps.tag.outputs.version }} is already published — nothing to do."
+          else
+            npm publish --tag "${{ steps.tag.outputs.tag }}"
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
