@@ -1,0 +1,363 @@
+{
+  "$schema": "https://schemas.tanqory.com/theme-contract/v1",
+  "contractVersion": "1.0.0",
+  "kitVersion": "0.2.0-rc.1",
+  "kitCompatibility": {
+    "min": "0.1.3",
+    "maxVerified": "0.2.0"
+  },
+  "generatedFrom": "src/contract/*.ts (do not hand-edit — run `pnpm contract`)",
+  "fieldTypes": [
+    {
+      "id": "text",
+      "tier": "core",
+      "control": "text-input",
+      "value": "string",
+      "constraints": [],
+      "dynamicBindable": true,
+      "dynamicSourceTypes": [
+        "single_line_text_field"
+      ],
+      "aiGenerate": true,
+      "doc": "Single-line text."
+    },
+    {
+      "id": "textarea",
+      "tier": "core",
+      "control": "textarea",
+      "value": "string",
+      "constraints": [],
+      "dynamicBindable": true,
+      "dynamicSourceTypes": [
+        "multi_line_text_field"
+      ],
+      "aiGenerate": true,
+      "doc": "Multi-line plain text. No markup."
+    },
+    {
+      "id": "richtext",
+      "tier": "core",
+      "control": "rich-text",
+      "value": "string",
+      "constraints": [],
+      "dynamicBindable": true,
+      "dynamicSourceTypes": [
+        "rich_text_field"
+      ],
+      "aiGenerate": true,
+      "doc": "Formatted text. Value is sanitised HTML."
+    },
+    {
+      "id": "html",
+      "tier": "core",
+      "control": "textarea",
+      "value": "string",
+      "constraints": [],
+      "dynamicBindable": false,
+      "dynamicSourceTypes": [],
+      "aiGenerate": false,
+      "doc": "Raw HTML. Author-trusted; never bind to shopper input."
+    },
+    {
+      "id": "number",
+      "tier": "core",
+      "control": "number-input",
+      "value": "number",
+      "constraints": [
+        "min",
+        "max",
+        "step"
+      ],
+      "dynamicBindable": true,
+      "dynamicSourceTypes": [
+        "number_integer",
+        "number_decimal"
+      ],
+      "aiGenerate": true,
+      "doc": "Numeric input."
+    },
+    {
+      "id": "range",
+      "tier": "core",
+      "control": "slider",
+      "value": "number",
+      "constraints": [
+        "min",
+        "max",
+        "step",
+        "unit"
+      ],
+      "dynamicBindable": false,
+      "dynamicSourceTypes": [],
+      "aiGenerate": true,
+      "doc": "Slider. Declare min/max/step or it sits on the 0–100 default."
+    },
+    {
+      "id": "boolean",
+      "tier": "core",
+      "control": "switch",
+      "value": "boolean",
+      "constraints": [],
+      "dynamicBindable": false,
+      "dynamicSourceTypes": [
+        "boolean"
+      ],
+      "aiGenerate": true,
+      "doc": "On/off toggle."
+    },
+    {
+      "id": "color",
+      "tier": "core",
+      "control": "color",
+      "value": "string",
+      "constraints": [],
+      "dynamicBindable": false,
+      "dynamicSourceTypes": [
+        "color"
+      ],
+      "aiGenerate": true,
+      "doc": "Colour value (hex)."
+    },
+    {
+      "id": "select",
+      "tier": "core",
+      "control": "select",
+      "value": "string",
+      "constraints": [
+        "options"
+      ],
+      "dynamicBindable": false,
+      "dynamicSourceTypes": [],
+      "aiGenerate": true,
+      "doc": "Dropdown. REQUIRES `options: [{value,label}]`."
+    },
+    {
+      "id": "radio",
+      "tier": "core",
+      "control": "segmented",
+      "value": "string",
+      "constraints": [
+        "options"
+      ],
+      "dynamicBindable": false,
+      "dynamicSourceTypes": [],
+      "aiGenerate": true,
+      "doc": "Segmented choice. REQUIRES `options: [{value,label}]`."
+    },
+    {
+      "id": "text_alignment",
+      "tier": "core",
+      "control": "segmented",
+      "value": "string",
+      "constraints": [],
+      "dynamicBindable": false,
+      "dynamicSourceTypes": [],
+      "aiGenerate": true,
+      "doc": "Left/center/right. The editor supplies the three choices."
+    },
+    {
+      "id": "url",
+      "tier": "core",
+      "control": "link-picker",
+      "value": "string",
+      "constraints": [],
+      "dynamicBindable": true,
+      "dynamicSourceTypes": [
+        "url"
+      ],
+      "aiGenerate": true,
+      "doc": "A link. The editor offers a link picker, not a raw text box."
+    },
+    {
+      "id": "image",
+      "tier": "core",
+      "control": "media-picker",
+      "value": "string",
+      "media": "image",
+      "constraints": [],
+      "dynamicBindable": true,
+      "dynamicSourceTypes": [
+        "file_reference",
+        "image"
+      ],
+      "aiGenerate": true,
+      "doc": "Media-library picker. Value is a plain URL string, consumed exactly like `url`. NOTE: the legacy spelling `image_picker` is an alias — declaring it downgrades the control to a free-text box."
+    },
+    {
+      "id": "video",
+      "tier": "core",
+      "control": "media-picker",
+      "value": "string",
+      "media": "video",
+      "constraints": [],
+      "dynamicBindable": false,
+      "dynamicSourceTypes": [
+        "file_reference"
+      ],
+      "aiGenerate": true,
+      "doc": "Media-library picker for a hosted video. For an EXTERNAL video URL use `url` — the editor renders this as a library browser, not a URL input."
+    },
+    {
+      "id": "collection",
+      "tier": "core",
+      "control": "resource-picker",
+      "value": "string",
+      "resource": "collection",
+      "constraints": [],
+      "dynamicBindable": false,
+      "dynamicSourceTypes": [
+        "collection_reference"
+      ],
+      "aiGenerate": true,
+      "doc": "Collection picker. Value is the collection HANDLE."
+    },
+    {
+      "id": "product",
+      "tier": "core",
+      "control": "resource-picker",
+      "value": "string",
+      "resource": "product",
+      "constraints": [],
+      "dynamicBindable": false,
+      "dynamicSourceTypes": [
+        "product_reference"
+      ],
+      "aiGenerate": true,
+      "doc": "Product picker. Value is the product HANDLE."
+    },
+    {
+      "id": "page",
+      "tier": "core",
+      "control": "resource-picker",
+      "value": "string",
+      "resource": "page",
+      "constraints": [],
+      "dynamicBindable": false,
+      "dynamicSourceTypes": [
+        "page_reference"
+      ],
+      "aiGenerate": true,
+      "doc": "Page picker. Value is the page HANDLE."
+    },
+    {
+      "id": "blog",
+      "tier": "core",
+      "control": "resource-picker",
+      "value": "string",
+      "resource": "blog",
+      "constraints": [],
+      "dynamicBindable": false,
+      "dynamicSourceTypes": [],
+      "aiGenerate": true,
+      "doc": "Blog picker. Value is the blog HANDLE."
+    },
+    {
+      "id": "article",
+      "tier": "core",
+      "control": "resource-picker",
+      "value": "string",
+      "resource": "article",
+      "constraints": [],
+      "dynamicBindable": false,
+      "dynamicSourceTypes": [],
+      "aiGenerate": true,
+      "doc": "Article picker. Value is the article HANDLE."
+    },
+    {
+      "id": "menu",
+      "tier": "core",
+      "control": "resource-picker",
+      "value": "string",
+      "resource": "menu",
+      "constraints": [],
+      "dynamicBindable": false,
+      "dynamicSourceTypes": [],
+      "aiGenerate": true,
+      "doc": "Store menu picker (Dashboard → Navigation). Value is the menu HANDLE. `link_list` is an accepted alias."
+    }
+  ],
+  "fieldTypeAliases": {
+    "image_picker": "image",
+    "link_list": "menu",
+    "checkbox": "boolean",
+    "color_background": "color"
+  },
+  "editorOnlyTypes": [
+    "liquid",
+    "inline_richtext",
+    "color_scheme",
+    "color_scheme_group",
+    "font_picker",
+    "product_list",
+    "collection_list",
+    "metaobject",
+    "video_url",
+    "header",
+    "paragraph"
+  ],
+  "universalConstraints": [
+    "default",
+    "label",
+    "info",
+    "placeholder",
+    "group",
+    "dynamic",
+    "visible_if"
+  ],
+  "content": {
+    "currentVersion": 2,
+    "nodeIdPattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+    "areas": [
+      "header",
+      "template",
+      "footer"
+    ],
+    "contextKinds": [
+      "product",
+      "collection",
+      "page",
+      "blog",
+      "article",
+      "cart",
+      "search"
+    ],
+    "roles": [
+      "section",
+      "block",
+      "layout"
+    ],
+    "groupSlots": [
+      "header",
+      "footer"
+    ],
+    "groupNamePattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$",
+    "templateContext": {
+      "404": [],
+      "index": [],
+      "product": [
+        "product"
+      ],
+      "collection": [
+        "collection"
+      ],
+      "list-collections": [],
+      "page": [
+        "page"
+      ],
+      "blog": [
+        "blog"
+      ],
+      "article": [
+        "article",
+        "blog"
+      ],
+      "cart": [
+        "cart"
+      ],
+      "search": [
+        "search"
+      ],
+      "account": []
+    }
+  }
+}

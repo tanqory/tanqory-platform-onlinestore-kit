@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.tanqory.com/theme-contract/v1/attr-spec.schema.json",
+  "title": "AttrSpec",
+  "description": "One editor-facing setting on a section or block.",
+  "type": "object",
+  "required": [
+    "type"
+  ],
+  "properties": {
+    "type": {
+      "enum": [
+        "text",
+        "textarea",
+        "richtext",
+        "html",
+        "number",
+        "range",
+        "boolean",
+        "color",
+        "select",
+        "radio",
+        "text_alignment",
+        "url",
+        "image",
+        "video",
+        "collection",
+        "product",
+        "page",
+        "blog",
+        "article",
+        "menu",
+        "image_picker",
+        "link_list",
+        "checkbox",
+        "color_background"
+      ]
+    },
+    "default": {},
+    "label": {
+      "type": "string"
+    },
+    "info": {
+      "type": "string"
+    },
+    "placeholder": {
+      "type": "string"
+    },
+    "group": {
+      "type": "string"
+    },
+    "dynamic": {
+      "type": "boolean"
+    },
+    "visible_if": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object"
+        }
+      ]
+    },
+    "min": {
+      "type": "number"
+    },
+    "max": {
+      "type": "number"
+    },
+    "step": {
+      "type": "number"
+    },
+    "unit": {
+      "type": "string"
+    },
+    "options": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "value",
+          "label"
+        ],
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

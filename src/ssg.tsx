@@ -8,6 +8,7 @@ import { CartProvider } from './cart'
 import { ThemeProvider } from './theme-context'
 import type { SectionDef, PageDoc, ContentNode } from './types'
 import type { MountOptions } from './mount'
+import { groupsFromGlob, resolvePageSections } from './mount'
 
 // Server-side render entry (SSG). Produces the storefront HTML string at BUILD
 // time so the published page ships real content in <div id="root">…</div>
@@ -33,13 +34,16 @@ export function renderStorefrontHTML(opts: MountOptions): string {
   const shells = opts.shell ? defaultsOf<FC<{ children: ReactNode }>>(opts.shell) : []
   const Shell: FC<{ children: ReactNode }> = shells[0] ?? (({ children }) => <>{children}</>)
   const pageDoc = pickByName<PageDoc>(opts.pages, opts.page ?? 'index') ?? { sections: [] }
+  // Same resolver as mount(): the prerendered markup and the hydrated tree
+  // come from one function, so SSG and client cannot disagree about a group.
+  const sections = resolvePageSections(pageDoc, groupsFromGlob(opts.groups))
 
   return renderToString(
     <DataProvider value={opts.data}>
       <ThemeProvider settings={opts.settings} locale={opts.locale}>
         <CartProvider>
           <Shell>
-            <SectionTree tree={pageDoc.sections} />
+            <SectionTree tree={sections} />
           </Shell>
         </CartProvider>
       </ThemeProvider>
@@ -63,8 +67,7 @@ export function renderSectionPreviewHTML(
   registerSections(defs)
 
   const def = defs.find((d) => (d as { name?: string }).name === type)
-  const presetBlocks = ((def as { presets?: Array<{ blocks?: ContentNode[] }> } | undefined)
-    ?.presets?.[0]?.blocks ?? []) as ContentNode[]
+  const presetBlocks = def?.presets?.[0]?.blocks ?? []
   const node = {
     type,
     id: 'preview',

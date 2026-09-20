@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.tanqory.com/theme-contract/v1/content-node.schema.json",
+  "title": "ContractNode",
+  "description": "A section instance or child block. `id` is REQUIRED: a missing id is filled in from the node position, so reordering silently reassigns it to different content.",
+  "type": "object",
+  "required": [
+    "type",
+    "id"
+  ],
+  "properties": {
+    "type": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "settings": {
+      "type": "object"
+    },
+    "area": {
+      "enum": [
+        "header",
+        "template",
+        "footer"
+      ]
+    },
+    "blocks": {
+      "type": "array",
+      "items": {
+        "$ref": "#"
+      }
+    }
+  }
+}

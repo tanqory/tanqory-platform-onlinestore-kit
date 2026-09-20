@@ -1,39 +1,38 @@
 import type { FC, ReactNode } from 'react'
+import type { AnyFieldType } from './contract/field-types'
+import type { ContextKind, PlacementContract, SectionRole, TemplateArea } from './contract/content'
+import type { GroupBinding, SectionGroupDoc } from './contract/groups'
 
 /** A single editor-facing setting (= a section attribute). */
 export interface AttrSpec {
-  type:
-    | 'text'
-    | 'textarea'
-    | 'color'
-    | 'number'
-    | 'url'
-    | 'boolean'
-    | 'select'
-    | 'radio'
-    | 'richtext'
-    | 'html'
-    // A left/center/right choice (`text_alignment`).
-    | 'text_alignment'
-    // A range slider (min/max/step).
-    | 'range'
-    // A hosted or external video URL.
-    | 'video'
-    // Catalogue pickers — the editor renders these as dropdowns fed by the
-    // storefront API (value = the entity's handle).
-    | 'collection'
-    | 'product'
-    | 'page'
-    | 'blog'
-    | 'article'
-    // A store menu / link list (value = menu handle).
-    | 'menu'
-    // Media-library picker — the editor opens the store's central media
-    // library (browse or upload). Value is a plain URL string, so section
-    // components consume it exactly like 'url'.
-    | 'image'
+  /**
+   * The control the editor renders.
+   *
+   * DERIVED from `contract/field-types.ts` — the union is
+   * `FieldTypeId | FieldTypeAlias`, computed from the one table that also feeds
+   * the validator, studio-api's gate and the AI generator's allowlist. They
+   * cannot drift apart because they are not written down twice.
+   *
+   * Every id carries its own documentation in that table (what the control is,
+   * what the runtime value looks like, whether it can be bound to a dynamic
+   * source). Read it there rather than duplicating prose here.
+   */
+  type: AnyFieldType
   default?: unknown
   label?: string
+  /**
+   * Editor panel heading this control is filed under (e.g. 'Brand', 'Header').
+   * Consumed by the theme-settings panel and by a theme's manifest generator,
+   * which groups `defineSettings({...})` entries by this key. Undeclared
+   * settings fall into 'General'.
+   */
+  group?: string
+  /**
+   * Opt this setting into "Insert dynamic source" (the ⛁ binding UI): the
+   * merchant may bind it to a product/collection/shop property or metaobject
+   * field instead of typing a literal. See `dynamic-source.tsx`.
+   */
+  dynamic?: boolean
   /** Slider bounds — for type 'range'. */
   min?: number
   max?: number
@@ -67,7 +66,40 @@ export interface SectionDef {
   icon?: string
   attributes?: Record<string, AttrSpec>
   allowedBlocks?: string[]
+  /**
+   * Starting compositions offered when the section is inserted. `presets[0]` is
+   * the default: `renderSectionPreviewHTML` seeds the preview with its blocks so
+   * a block-composed section doesn't render empty in the inserter.
+   *
+   * Declared here because the runtime already reads it (`ssg.tsx`) — it was
+   * reached through a cast while the type omitted it, so every theme that
+   * shipped a preset failed `tsc` on its own section definitions.
+   */
+  presets?: SectionPreset[]
+  /**
+   * What kind of unit this is — `section` (page unit), `block` (nests inside a
+   * parent's `allowedBlocks`) or `layout` (header/footer chrome, lives in a
+   * shared group). Explicit, because `category` is a display grouping and was
+   * being read as a placement rule. Absent = derived; see contract `roleOf`.
+   */
+  role?: SectionRole
+  /** Default slot for a layout section (`header` | `footer`). */
+  area?: TemplateArea
+  /** Allowlists for where this unit may be placed. */
+  placement?: PlacementContract
+  /** Route context this section needs (`product`, `collection`, …). */
+  requiresContext?: readonly ContextKind[]
   component: FC<SectionProps>
+}
+
+/** One starting composition for a section (see `SectionDef.presets`). */
+export interface SectionPreset {
+  /** Optional label shown in the inserter when a section offers several. */
+  name?: string
+  /** Section settings this preset starts from. */
+  settings?: Record<string, unknown>
+  /** Child block instances this preset starts from. */
+  blocks?: ContentNode[]
 }
 
 /** A node in the content tree (what the editor stores as JSON, never HTML). */
@@ -77,9 +109,22 @@ export interface ContentNode {
   settings?: Record<string, unknown>
   /** Nested child instances. */
   blocks?: ContentNode[]
+  /** Layout slot: `header` | `template` | `footer`. */
+  area?: TemplateArea
 }
+
+/** A node in the content tree — `area` is the layout slot it belongs to. */
 
 /** A page = a route + its tree of section instances. */
 export interface PageDoc {
   sections: ContentNode[]
+  /**
+   * Shared header/footer bindings (content version 2): `"header"` references
+   * `groups/header.json`; `{ override: [...] }` is a page-specific composition.
+   * Absent → the page's inline header/footer sections are used (version 1).
+   */
+  groups?: Partial<Record<'header' | 'footer', GroupBinding>>
+  contentVersion?: number
 }
+
+export type { SectionGroupDoc }

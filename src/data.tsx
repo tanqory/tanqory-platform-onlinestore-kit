@@ -191,8 +191,15 @@ export interface Product {
   createdAt?: string | null
   /** Canonical storefront URL (`product.url`). */
   onlineStoreUrl?: string | null
-  /** Long description — only populated by `fetchProduct()` (PDP). */
+  /** Long description as PLAINTEXT — only populated by `fetchProduct()` (PDP). */
   description?: string
+  /**
+   * The same body WITH the merchant's formatting (`Product.descriptionHtml`,
+   * `@cost(value: 0)`), already sanitised by store-api. Only populated by
+   * `fetchProduct()` (PDP). A theme renders it as HTML and must not re-sanitise
+   * it; `description` is the plaintext fallback for text-only surfaces.
+   */
+  descriptionHtml?: string
   /** Image gallery — only after `fetchProduct()` (PDP). */
   images?: ImageRef[]
   /** Full media gallery incl. video / 3D (`product.media`) — after `fetchProduct()`. */
@@ -1002,6 +1009,7 @@ const PRODUCT_QUERY = /* GraphQL */ `
       handle
       title
       description
+      descriptionHtml
       vendor
       productType
       tags
@@ -1116,6 +1124,7 @@ interface GqlMediaNode {
 }
 interface GqlProductDetailNode extends GqlProductNode {
   description?: string | null
+  descriptionHtml?: string | null
   isGiftCard?: boolean | null
   totalInventory?: number | null
   images?: { nodes: GqlImg[] }
@@ -1199,6 +1208,7 @@ function normalizeProductDetail(p: GqlProductDetailNode): Product {
   return {
     ...base,
     ...(p.description ? { description: p.description } : {}),
+    ...(p.descriptionHtml ? { descriptionHtml: p.descriptionHtml } : {}),
     ...(typeof p.isGiftCard === 'boolean' ? { isGiftCard: p.isGiftCard } : {}),
     ...(typeof p.totalInventory === 'number' ? { totalInventory: p.totalInventory } : {}),
     ...(images.length ? { images } : {}),
