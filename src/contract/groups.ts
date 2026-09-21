@@ -7,8 +7,7 @@
  * copies drifted silently, and there was no way to say "this page is different
  * on purpose" versus "nobody updated this copy".
  *
- * The model (the same shape Shopify uses for `sections/header-group.json`,
- * expressed in Tanqory's JSON-tree vocabulary):
+ * The model, in Tanqory's JSON-tree vocabulary:
  *
  *   groups/<name>.json     ONE source of truth per shared slot:
  *                          { "type": "header", "sections": [ …ContractNode ] }

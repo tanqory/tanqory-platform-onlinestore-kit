@@ -172,7 +172,7 @@ export const FIELD_TYPE_ALIASES = {
  * FIELD_TYPES *and* to studio-api's gate in the same change.
  */
 export const EDITOR_ONLY_TYPES = [
-  'liquid', 'inline_richtext', 'color_scheme', 'color_scheme_group',
+  'inline_richtext', 'color_scheme', 'color_scheme_group',
   'font_picker', 'product_list', 'collection_list', 'metaobject',
   'video_url', 'header', 'paragraph',
 ] as const
