@@ -283,7 +283,6 @@
     "color_background": "color"
   },
   "editorOnlyTypes": [
-    "liquid",
     "inline_richtext",
     "color_scheme",
     "color_scheme_group",
