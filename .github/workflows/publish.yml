@@ -52,14 +52,48 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "Publishing $VERSION with dist-tag $TAG"
 
-      # Re-running the workflow for a version that is already on the registry
-      # (published by hand, or a re-pushed tag) is a no-op, not a red build.
-      - name: Publish to GitHub Packages
+      # ONE tarball, two registries. The same bytes go to both, so a lockfile
+      # integrity is valid whichever registry a consumer resolves the scope to.
+      - name: Pack
+        id: pack
         run: |
-          if npm view "@tanqory/theme-kit@${{ steps.tag.outputs.version }}" version >/dev/null 2>&1; then
-            echo "@tanqory/theme-kit@${{ steps.tag.outputs.version }} is already published — nothing to do."
-          else
-            npm publish --tag "${{ steps.tag.outputs.tag }}"
+          FILE=$(npm pack --silent | tail -1)
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          echo "sha256 $(sha256sum "$FILE")"
+          echo "integrity sha512-$(openssl dgst -sha512 -binary "$FILE" | base64 -w0)"
+
+      # npmjs.org — PUBLIC, installs with no token. This is what a theme cloned
+      # by anyone outside the org resolves (nova's .npmrc maps nothing). The kit
+      # was first published here (0.1.0) for exactly that reason.
+      # Needs the repository secret NPM_TOKEN (an npm automation token for the
+      # `tanqory` scope). Without it the step fails LOUDLY rather than skipping:
+      # a release that silently reaches one registry is how a public theme ends
+      # up uninstallable.
+      - name: Publish to npmjs.org (public)
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error::NPM_TOKEN is not set — add an npm automation token for the @tanqory scope as a repository secret."
+            exit 1
           fi
+          CONF=$(mktemp)
+          printf '@tanqory:registry=https://registry.npmjs.org/\n//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$CONF"
+          if npm view "@tanqory/theme-kit@${{ steps.tag.outputs.version }}" version --userconfig "$CONF" >/dev/null 2>&1; then
+            echo "already on npmjs.org — nothing to do."
+          else
+            npm publish "${{ steps.pack.outputs.file }}" --tag "${{ steps.tag.outputs.tag }}" --access public --userconfig "$CONF"
+          fi
+          rm -f "$CONF"
+
+      # GitHub Packages — what the org's own repositories resolve @tanqory to
+      # (they need other, private @tanqory packages from there too).
+      - name: Publish to GitHub Packages (internal)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if npm view "@tanqory/theme-kit@${{ steps.tag.outputs.version }}" version >/dev/null 2>&1; then
+            echo "already on GitHub Packages — nothing to do."
+          else
+            npm publish "${{ steps.pack.outputs.file }}" --tag "${{ steps.tag.outputs.tag }}"
+          fi

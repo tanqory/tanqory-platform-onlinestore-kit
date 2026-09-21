@@ -66,7 +66,7 @@ time instead: a memorised list is how the generator ended up teaching
 
 ### Rendered by the editor but NOT declarable by a theme
 
-`liquid` · `inline_richtext` · `color_scheme` · `color_scheme_group` · `font_picker` · `product_list` · `collection_list` · `metaobject` · `video_url` · `header` · `paragraph`
+`inline_richtext` · `color_scheme` · `color_scheme_group` · `font_picker` · `product_list` · `collection_list` · `metaobject` · `video_url` · `header` · `paragraph`
 
 Declaring one of these is an error, not a downgrade — the theme cannot
 reach these controls until the contract promotes them.
