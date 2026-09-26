@@ -13,6 +13,7 @@ export {
   getConsent,
   setConsent,
   hasConsent,
+  isGpcOn,
   hasDecided,
   setBannerRequired,
   isBannerRequired,

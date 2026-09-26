@@ -8,6 +8,8 @@
  * subscribers (pixels, analytics) react live to Accept/Decline/Manage.
  *
  * Gate semantics (`hasConsent`):
+ *   - Global Privacy Control (navigator.globalPrivacyControl === true) → MARKETING is always
+ *     denied, whatever the banner or a stored choice says (CPRA/CCPA opt-out of sale/sharing).
  *   - banner NOT required (merchant didn't enable it) → always allowed.
  *   - banner required + undecided → denied (opt-in / GDPR-safe).
  *   - banner required + decided    → the stored purpose flag.
@@ -61,8 +63,18 @@ export function setConsent(c: Consent): void {
   }
 }
 
+/** The shopper's browser sends the GPC opt-out signal. Never throws (SSR / no navigator). */
+export function isGpcOn(): boolean {
+  try {
+    return (navigator as unknown as { globalPrivacyControl?: boolean }).globalPrivacyControl === true
+  } catch {
+    return false
+  }
+}
+
 /** True when `purpose` may run right now (see gate semantics above). */
 export function hasConsent(purpose: keyof Consent): boolean {
+  if (purpose === 'marketing' && isGpcOn()) return false
   if (!bannerRequired) return true
   const c = getConsent()
   return c ? c[purpose] : false
