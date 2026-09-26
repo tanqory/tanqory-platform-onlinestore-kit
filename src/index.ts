@@ -8,7 +8,9 @@ export {
   type AnalyticsOptions,
   type StorefrontEventType,
   type StorefrontEvent,
+  type CheckoutCompletedData,
 } from './analytics'
+export { wrapPixelCode } from './pixel-code'
 export {
   getConsent,
   setConsent,

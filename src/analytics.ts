@@ -23,6 +23,7 @@ import { hasConsent } from './consent'
 const VISITOR_KEY = 'tq-visitor-id'
 const SESSION_KEY = 'tq-session'
 const SESSION_TTL_MS = 30 * 60 * 1000
+const SENT_KEY = 'tq-px-sent'
 const DEFAULT_ENDPOINT = '/api/v1/analytics/events/batch'
 
 /** store-api SessionEventType values we emit from the storefront. */
@@ -34,7 +35,34 @@ export type StorefrontEventType =
   | 'PRODUCT_REMOVED_FROM_CART'
   | 'CART_VIEWED'
   | 'CHECKOUT_STARTED'
+  | 'CHECKOUT_COMPLETED'
   | 'SEARCH_SUBMITTED'
+
+/**
+ * `checkout_completed` — the CONFIRMED order (the event every purchase pixel binds to: Meta Purchase,
+ * GA4 purchase, Google Ads conversion, TikTok CompletePayment, Pinterest checkout, Snapchat PURCHASE,
+ * X Purchase). The shape is the one the pixel wizard's snippets read
+ * (`event.data.checkout.totalPrice.{amount,currencyCode}`, `.lineItems[].variant.id/.title`,
+ * `.order.id`). `currencyCode` is ALWAYS the order's own currency — a producer that cannot state it must
+ * not emit the event. The buyer's email, if included, is a SHA-256 of the normalised address, never raw.
+ * Producers (the checkout app, or a theme that renders its own thank-you) must publish once per order:
+ * see `Analytics.checkoutCompleted`.
+ */
+export interface CheckoutCompletedData {
+  checkout: {
+    currencyCode: string
+    totalPrice: { amount: number; currencyCode: string }
+    subtotalPrice?: { amount: number; currencyCode: string }
+    totalTax?: { amount: number; currencyCode: string }
+    lineItems: Array<{
+      title: string
+      quantity: number
+      variant: { id: string | null; sku?: string | null; price?: { amount: number; currencyCode: string } | null }
+    }>
+    order: { id: string; number?: string | number | null }
+    emailSha256?: string
+  }
+}
 
 /** The normalized event delivered to pixel subscribers on the client bus. */
 export interface StorefrontEvent {
@@ -61,6 +89,13 @@ export interface Analytics {
   flush(): void
   /** Subscribe to customer events (for pixels/apps). See `subscribe()`. */
   subscribe(eventName: string, cb: (e: StorefrontEvent) => void): () => void
+  /**
+   * Publish `checkout_completed` for a confirmed order — AT MOST ONCE per order id (remembered in
+   * localStorage, so a reload of the thank-you page does not double-count a purchase). Returns whether
+   * it was published. Refuses (false) without a valid ISO-4217 currency or an order id: no default.
+   * Consent is the bus's own gate (marketing).
+   */
+  checkoutCompleted(data: CheckoutCompletedData): boolean
 }
 
 export interface AnalyticsOptions {
@@ -71,7 +106,13 @@ export interface AnalyticsOptions {
   consent?: () => boolean
 }
 
-const NOOP: Analytics = { track() {}, pageViewed() {}, flush() {}, subscribe: () => () => {} }
+const NOOP: Analytics = {
+  track() {},
+  pageViewed() {},
+  flush() {},
+  subscribe: () => () => {},
+  checkoutCompleted: () => false,
+}
 
 // ── Customer-event bus (standard web-pixel) ─────────────────────────────
 // Module-scoped so the injected `window.tqAnalytics.subscribe` and the active
@@ -272,8 +313,29 @@ export function createAnalytics(opts: AnalyticsOptions): Analytics {
     subscribe,
   }
 
+  const checkoutCompleted: Analytics['checkoutCompleted'] = (data) => {
+    const c = data?.checkout
+    const orderId = c?.order?.id
+    const cur = c?.totalPrice?.currencyCode
+    if (!orderId || typeof cur !== 'string' || !/^[A-Z]{3}$/.test(cur) || c.currencyCode !== cur) return false
+    const key = `checkout_completed:${orderId}`
+    // Only remember an order once the bus was actually allowed to deliver it (consent), otherwise a
+    // purchase seen before consent would be lost for good.
+    if (!hasConsent('marketing')) return false
+    try {
+      const sent = JSON.parse(localStorage.getItem(SENT_KEY) || '[]') as string[]
+      if (sent.includes(key)) return false
+      localStorage.setItem(SENT_KEY, JSON.stringify([...sent, key].slice(-200)))
+    } catch {
+      /* no storage: publish anyway; dedupe holds for this page load only */
+    }
+    track('CHECKOUT_COMPLETED', data as unknown as Record<string, unknown>)
+    return true
+  }
+
   const api: Analytics = {
     track,
+    checkoutCompleted,
     pageViewed: (properties = {}) =>
       track('PAGE_VIEWED', { pageUrl: location.href, pageTitle: document.title, ...properties }),
     flush: send,
