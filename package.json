@@ -2,7 +2,7 @@
   "name": "@tanqory/theme-kit",
   "version": "0.2.0-rc.2",
   "type": "module",
-  "description": "Framework for Tanqory React themes — block registry, JSON-tree renderer, data layer, mount(). Themes depend on this and only author blocks/ + pages/.",
+  "description": "Framework for Tanqory React themes \u2014 block registry, JSON-tree renderer, data layer, mount(). Themes depend on this and only author blocks/ + pages/.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tanqory/tanqory-platform-onlinestore-kit.git"
@@ -34,8 +34,8 @@
   "scripts": {
     "build": "vite build && vite build --config vite.contract.config.ts && tsc -p tsconfig.json --emitDeclarationOnly --declaration --outDir dist/types",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test tests/*.test.mjs",
-    "test:watch": "node --test --watch tests/*.test.mjs",
+    "test": "node --test --experimental-strip-types tests/*.test.mjs",
+    "test:watch": "node --test --experimental-strip-types --watch tests/*.test.mjs",
     "verify": "pnpm typecheck && pnpm build && pnpm contract:check && pnpm test",
     "contract": "node scripts/gen-contract.mjs",
     "contract:check": "node scripts/gen-contract.mjs --check",
