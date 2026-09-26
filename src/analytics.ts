@@ -18,7 +18,7 @@
  * telemetry POST is gated separately on ANALYTICS consent.
  */
 
-import { hasConsent } from './consent'
+import { getConsent, hasConsent } from './consent'
 
 const VISITOR_KEY = 'tq-visitor-id'
 const SESSION_KEY = 'tq-session'
@@ -93,7 +93,8 @@ export interface Analytics {
    * Publish `checkout_completed` for a confirmed order — AT MOST ONCE per order id (remembered in
    * localStorage, so a reload of the thank-you page does not double-count a purchase). Returns whether
    * it was published. Refuses (false) without a valid ISO-4217 currency or an order id: no default.
-   * Consent is the bus's own gate (marketing).
+   * Consent: an EXPLICIT marketing grant is required (deny until decided) and Global Privacy Control
+   * blocks it — independent of the store's banner setting.
    */
   checkoutCompleted(data: CheckoutCompletedData): boolean
 }
@@ -123,10 +124,33 @@ const REPLAY_MAX = 50
 const busSubscribers = new Map<string, Set<(e: StorefrontEvent) => void>>()
 const busReplay: StorefrontEvent[] = []
 
+/**
+ * The gate for the PURCHASE. Stricter than `hasConsent`, on purpose: `hasConsent` allows everything when
+ * no banner is configured (fail-open) and does not read Global Privacy Control. A purchase carries the
+ * order value and a hashed email to every connected ad pixel, so it is delivered only on an explicit
+ * decision — GPC on → never; no stored decision → never; else the stored `marketing` flag — whatever
+ * the store's banner setting says (kit contract: deny until decided).
+ */
+function purchaseConsent(): boolean {
+  try {
+    if ((navigator as unknown as { globalPrivacyControl?: boolean }).globalPrivacyControl === true) return false
+  } catch {
+    /* no navigator: fall through to the stored decision */
+  }
+  return getConsent()?.marketing === true
+}
+
+function withoutEmailHash(properties: Record<string, unknown>): Record<string, unknown> {
+  const checkout = properties.checkout
+  if (!checkout || typeof checkout !== 'object') return properties
+  const { emailSha256: _dropped, ...rest } = checkout as Record<string, unknown>
+  return { ...properties, checkout: rest }
+}
+
 function busPublish(evt: StorefrontEvent): void {
   // Pixels are marketing/tracking — deliver (and retain) only once the shopper
   // allows it. Pre-consent events are never buffered (privacy-safe).
-  if (!hasConsent('marketing')) return
+  if (evt.type === 'CHECKOUT_COMPLETED' ? !purchaseConsent() : !hasConsent('marketing')) return
   busReplay.push(evt)
   if (busReplay.length > REPLAY_MAX) busReplay.shift()
   const fire = (set?: Set<(e: StorefrontEvent) => void>) => {
@@ -298,7 +322,8 @@ export function createAnalytics(opts: AnalyticsOptions): Analytics {
       eventName: type.toLowerCase(),
       eventType: type,
       timestamp: new Date().toISOString(),
-      properties,
+      // The buyer's hashed email is for the merchant's ad pixels only; it never rides our beacon.
+      properties: type === 'CHECKOUT_COMPLETED' ? withoutEmailHash(properties) : properties,
     })
     if (queue.length >= batchSize) send()
   }
@@ -321,7 +346,7 @@ export function createAnalytics(opts: AnalyticsOptions): Analytics {
     const key = `checkout_completed:${orderId}`
     // Only remember an order once the bus was actually allowed to deliver it (consent), otherwise a
     // purchase seen before consent would be lost for good.
-    if (!hasConsent('marketing')) return false
+    if (!purchaseConsent()) return false
     try {
       const sent = JSON.parse(localStorage.getItem(SENT_KEY) || '[]') as string[]
       if (sent.includes(key)) return false
