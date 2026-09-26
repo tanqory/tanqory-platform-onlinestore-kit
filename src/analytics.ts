@@ -18,7 +18,7 @@
  * telemetry POST is gated separately on ANALYTICS consent.
  */
 
-import { getConsent, hasConsent } from './consent'
+import { getConsent } from './consent'
 
 const VISITOR_KEY = 'tq-visitor-id'
 const SESSION_KEY = 'tq-session'
@@ -125,13 +125,14 @@ const busSubscribers = new Map<string, Set<(e: StorefrontEvent) => void>>()
 const busReplay: StorefrontEvent[] = []
 
 /**
- * The gate for the PURCHASE. Stricter than `hasConsent`, on purpose: `hasConsent` allows everything when
+ * The gate for EVERY pixel path — injection of the merchant's pixel scripts, delivery of every event on
+ * the bus, and the purchase. Stricter than `hasConsent`, on purpose: `hasConsent` allows everything when
  * no banner is configured (fail-open) and does not read Global Privacy Control. A purchase carries the
  * order value and a hashed email to every connected ad pixel, so it is delivered only on an explicit
  * decision — GPC on → never; no stored decision → never; else the stored `marketing` flag — whatever
  * the store's banner setting says (kit contract: deny until decided).
  */
-function purchaseConsent(): boolean {
+export function pixelConsent(): boolean {
   try {
     if ((navigator as unknown as { globalPrivacyControl?: boolean }).globalPrivacyControl === true) return false
   } catch {
@@ -150,7 +151,7 @@ function withoutEmailHash(properties: Record<string, unknown>): Record<string, u
 function busPublish(evt: StorefrontEvent): void {
   // Pixels are marketing/tracking — deliver (and retain) only once the shopper
   // allows it. Pre-consent events are never buffered (privacy-safe).
-  if (evt.type === 'CHECKOUT_COMPLETED' ? !purchaseConsent() : !hasConsent('marketing')) return
+  if (!pixelConsent()) return
   busReplay.push(evt)
   if (busReplay.length > REPLAY_MAX) busReplay.shift()
   const fire = (set?: Set<(e: StorefrontEvent) => void>) => {
@@ -346,7 +347,7 @@ export function createAnalytics(opts: AnalyticsOptions): Analytics {
     const key = `checkout_completed:${orderId}`
     // Only remember an order once the bus was actually allowed to deliver it (consent), otherwise a
     // purchase seen before consent would be lost for good.
-    if (!purchaseConsent()) return false
+    if (!pixelConsent()) return false
     try {
       const sent = JSON.parse(localStorage.getItem(SENT_KEY) || '[]') as string[]
       if (sent.includes(key)) return false

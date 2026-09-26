@@ -4,6 +4,7 @@ export {
   createAnalytics,
   getAnalytics,
   subscribe,
+  pixelConsent,
   type Analytics,
   type AnalyticsOptions,
   type StorefrontEventType,
